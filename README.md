@@ -9,8 +9,9 @@ A peer of the official [Python](https://github.com/a2aproject/a2a-python) and
 architectural seams — but designed for the Elixir/OTP ecosystem rather than
 ported line-by-line.
 
-> **Status:** early architecture planning. No code yet; the design is documented
-> under [`docs/`](docs/architecture.md).
+> **Status:** the typed foundation and the server-core walking skeleton (blocking
+> `message/send` over the OTP process model) are implemented; HTTP transports,
+> streaming, cancel, and push are the next phases. Design under [`docs/`](docs/architecture.md).
 
 ## Design decisions
 

@@ -20,8 +20,14 @@ across **4 phases** (Phase 1: 12 core messages + both enums; Phases 2–4: agent
 card, security schemes, and push/listing). Every proto message now has a
 hand-written `A2A.Types.*` struct; the coverage manifest's `@deferred` list
 (`test/support/coverage.ex`) is empty and is retained only as the drift guard
-against future proto releases. This still covers data-model shapes and codec
-only — no server, transport, process, or socket behaviour yet.
+against future proto releases. The typed foundation itself still covers only
+data-model shapes and codec — no transport, process, or socket behaviour — but
+see the server runtime paragraph below.
+
+The **server runtime** (`A2A.Server.*`) is now underway — Phase 1 delivers the OTP
+walking skeleton (mountable supervision tree, process-per-task execution, PubSub
+event path, ETS `TaskStore`, and a blocking `DefaultHandler.send_message/get_task`).
+HTTP transports, streaming, cancellation, and push notifications are follow-on phases.
 
 ## Common commands
 
