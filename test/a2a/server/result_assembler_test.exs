@@ -31,7 +31,49 @@ defmodule A2A.Server.ResultAssemblerTest do
     a2 = %Artifact{artifact_id: "a", parts: [Part.text("two")]}
     task = RA.apply(task, %TaskArtifactUpdateEvent{task_id: "t", artifact: a1, append: false})
     task = RA.apply(task, %TaskArtifactUpdateEvent{task_id: "t", artifact: a2, append: true})
-    assert [%Artifact{artifact_id: "a", parts: [_, _]}] = task.artifacts
+    assert [%Artifact{artifact_id: "a", parts: [p1, p2]}] = task.artifacts
+    assert p1.text == "one"
+    assert p2.text == "two"
+  end
+
+  test "artifact update with append: false replaces an existing artifact wholesale" do
+    task = RA.init("t", "c")
+    a1 = %Artifact{artifact_id: "a", parts: [Part.text("one"), Part.text("two")]}
+    a2 = %Artifact{artifact_id: "a", parts: [Part.text("fresh")]}
+    task = RA.apply(task, %TaskArtifactUpdateEvent{task_id: "t", artifact: a1, append: false})
+    task = RA.apply(task, %TaskArtifactUpdateEvent{task_id: "t", artifact: a2, append: false})
+    assert [%Artifact{artifact_id: "a", parts: [only]}] = task.artifacts
+    assert only.text == "fresh"
+  end
+
+  test "Task snapshot adopts id/context/status but preserves accumulated history and artifacts" do
+    msg = %Message{message_id: "m", role: :agent, parts: [Part.text("hi")]}
+    art = %Artifact{artifact_id: "a", parts: [Part.text("one")]}
+
+    seeded =
+      RA.init("old", "old-ctx")
+      |> RA.apply(msg)
+      |> RA.apply(%TaskArtifactUpdateEvent{task_id: "old", artifact: art, append: false})
+
+    snapshot = %Task{
+      id: "new",
+      context_id: "new-ctx",
+      status: %TaskStatus{state: :working}
+    }
+
+    task = RA.apply(seeded, snapshot)
+    assert task.id == "new"
+    assert task.context_id == "new-ctx"
+    assert task.status.state == :working
+    assert task.history == [msg]
+    assert [%Artifact{artifact_id: "a"}] = task.artifacts
+  end
+
+  test "bare Message event is appended to history" do
+    m1 = %Message{message_id: "m1", role: :user, parts: [Part.text("first")]}
+    m2 = %Message{message_id: "m2", role: :agent, parts: [Part.text("second")]}
+    task = RA.init("t", "c") |> RA.apply(m1) |> RA.apply(m2)
+    assert task.history == [m1, m2]
   end
 
   test "terminal task is frozen" do
