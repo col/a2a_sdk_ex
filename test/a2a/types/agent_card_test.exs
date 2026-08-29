@@ -274,4 +274,19 @@ defmodule A2A.Types.AgentCardTest do
     {:ok, iodata} = JSON.encode(card)
     assert {:ok, ^card} = JSON.decode(IO.iodata_to_binary(iodata), AgentCard)
   end
+
+  test "explicit-presence optional string distinguishes set-empty from unset" do
+    set_empty = %AgentCard{documentation_url: ""}
+    json = set_empty |> JSON.encode!() |> Jason.decode!()
+
+    assert Map.has_key?(json, "documentationUrl")
+    assert json["documentationUrl"] == ""
+    assert {:ok, %AgentCard{documentation_url: ""}} = JSON.decode(Jason.encode!(json), AgentCard)
+
+    unset = %AgentCard{documentation_url: nil}
+    json = unset |> JSON.encode!() |> Jason.decode!()
+
+    refute Map.has_key?(json, "documentationUrl")
+    assert {:ok, %AgentCard{documentation_url: nil}} = JSON.decode(Jason.encode!(json), AgentCard)
+  end
 end

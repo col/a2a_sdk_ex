@@ -92,7 +92,7 @@ defmodule A2A.Types.AgentCapabilities do
           extensions: [AgentExtension.t()],
           extended_agent_card: boolean() | nil
         }
-  defstruct [:streaming, :push_notifications, :extended_agent_card, extensions: []]
+  defstruct [:streaming, :push_notifications, extensions: [], extended_agent_card: nil]
 
   @doc false
   def __a2a_proto_name__, do: "AgentCapabilities"
@@ -307,7 +307,9 @@ defmodule A2A.Types.AgentCard do
         number: 7,
         type: {:message, AgentCapabilities}
       ),
-      # security_schemes references a Phase-3 message (map<string, SecurityScheme>); passthrough until Phase 3.
+      # security_schemes is a proto map<string, SecurityScheme>, kept as :raw passthrough. Unlike the
+      # repeated-message fields below, the codec has no proto-map wire type today; Phase 3 must add
+      # dedicated map codec support, not just swap in a {:message, _} type.
       Field.new(
         name: :security_schemes,
         proto_name: "security_schemes",
