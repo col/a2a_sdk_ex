@@ -8,7 +8,7 @@ defmodule A2A.MixProject do
     [
       app: :a2a,
       version: @version,
-      elixir: "~> 1.14",
+      elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -18,10 +18,11 @@ defmodule A2A.MixProject do
       description: "Elixir SDK for building A2A (Agent2Agent) compliant agents.",
       package: package(),
       docs: docs(),
-      test_coverage: [tool: ExUnit],
-      preferred_cli_env: ["test.proto": :test]
+      test_coverage: [tool: ExUnit]
     ]
   end
+
+  def cli, do: [preferred_envs: ["test.proto": :test]]
 
   def application, do: [extra_applications: [:logger]]
 

@@ -6,7 +6,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
-        with: {otp-version: "26", elixir-version: "1.16"}
+        with: {otp-version: "27", elixir-version: "1.20.4"}
       - run: mix deps.get
       - run: mix format --check-formatted
       - run: mix credo --strict
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
-        with: {otp-version: "26", elixir-version: "1.16"}
+        with: {otp-version: "27", elixir-version: "1.20.4"}
       - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - run: mix deps.get
       - run: mix escript.install --force hex protobuf
