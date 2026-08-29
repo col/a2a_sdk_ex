@@ -31,6 +31,7 @@ defmodule A2A.MixProject do
   defp deps do
     [
       {:jason, "~> 1.4"},
+      {:phoenix_pubsub, "~> 2.1"},
       {:stream_data, "~> 1.1", only: :test},
       {:protobuf, "~> 0.14", only: [:dev, :test], runtime: false},
       {:google_protos, "~> 0.4", only: [:dev, :test]},
