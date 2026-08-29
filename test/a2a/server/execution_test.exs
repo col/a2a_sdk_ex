@@ -79,4 +79,39 @@ defmodule A2A.Server.ExecutionTest do
 
     assert {:ok, %{status: %{state: :failed}}} = TaskStore.ETS.get("boom", A2A.Scope.default())
   end
+
+  @tag :capture_log
+  test "an executor throw transitions the task to failed and is not restarted",
+       %{pubsub: pubsub} = m do
+    :ok = Events.subscribe(pubsub, "thrown")
+    {:ok, pid} = Execution.start(m.dyn, m.registry, arg(A2A.Test.ThrowExecutor, "thrown", m))
+    ref = Process.monitor(pid)
+
+    assert_receive %Event{
+                     terminal?: true,
+                     payload: %A2A.Types.TaskStatusUpdateEvent{status: %{state: :failed}}
+                   },
+                   1000
+
+    assert {:ok, %{status: %{state: :failed}}} = TaskStore.ETS.get("thrown", A2A.Scope.default())
+
+    # temporary: no restart is attempted, so the process simply stays dead
+    # (it may already have exited by the time we observe it, hence :noproc).
+    assert_receive {:DOWN, ^ref, :process, ^pid, reason} when reason in [:normal, :noproc]
+    refute Process.alive?(pid)
+  end
+
+  @tag :capture_log
+  test "an executor exit transitions the task to failed", %{pubsub: pubsub} = m do
+    :ok = Events.subscribe(pubsub, "exited")
+    {:ok, _} = Execution.start(m.dyn, m.registry, arg(A2A.Test.ExitExecutor, "exited", m))
+
+    assert_receive %Event{
+                     terminal?: true,
+                     payload: %A2A.Types.TaskStatusUpdateEvent{status: %{state: :failed}}
+                   },
+                   1000
+
+    assert {:ok, %{status: %{state: :failed}}} = TaskStore.ETS.get("exited", A2A.Scope.default())
+  end
 end

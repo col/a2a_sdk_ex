@@ -2,9 +2,12 @@ defmodule A2A.Server.Execution do
   @moduledoc """
   The single process for a `task_id`. Runs the author's `execute/2` under a serial
   mailbox — the only writer of the task's live state — broadcasting and persisting
-  each emitted event via the `TaskUpdater`. Transient: normal completion exits `:normal`.
+  each emitted event via the `TaskUpdater`. Temporary: an execution has no resume
+  logic, so it must never be restarted — restarting would re-run `execute/2` and
+  re-emit/re-persist duplicate events. Both normal completion and abnormal exit
+  (raise, throw, exit) settle with `{:stop, :normal, state}` after failing the task.
   """
-  use GenServer, restart: :transient
+  use GenServer, restart: :temporary
   require Logger
   alias A2A.Server.TaskUpdater
 
@@ -37,6 +40,12 @@ defmodule A2A.Server.Execution do
     e ->
       Logger.error("A2A execution #{arg.task_id} crashed: #{Exception.message(e)}")
       TaskUpdater.fail(updater, Exception.message(e))
+      {:stop, :normal, state}
+  catch
+    kind, reason ->
+      message = "#{kind}: #{inspect(reason)}"
+      Logger.error("A2A execution #{arg.task_id} crashed: #{message}")
+      TaskUpdater.fail(updater, message)
       {:stop, :normal, state}
   end
 end

@@ -6,6 +6,10 @@ defmodule A2A.Server.ResultAssembler do
   """
   alias A2A.Types.{Message, Task, TaskArtifactUpdateEvent, TaskStatus, TaskStatusUpdateEvent}
 
+  # Governs task freezing (see `apply/2`) and rejection of new work on a task
+  # that has already ended (see `DefaultHandler.reject_terminal/2`). Deliberately
+  # EXCLUDES `:input_required` — that state must remain resumable, unlike the
+  # `TaskUpdater` terminal set below, which ends the blocking drain on it too.
   @terminal_states [:completed, :failed, :canceled, :rejected]
 
   @spec init(String.t(), String.t() | nil) :: Task.t()

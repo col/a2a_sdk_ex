@@ -33,3 +33,21 @@ defmodule A2A.Test.BoomExecutor do
   @impl true
   def cancel(_ctx, _updater), do: :ok
 end
+
+defmodule A2A.Test.ThrowExecutor do
+  @moduledoc "Throws, to exercise the catch :throw boundary → failed."
+  @behaviour A2A.Server.AgentExecutor
+  @impl true
+  def execute(_ctx, _updater), do: throw(:boom)
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+end
+
+defmodule A2A.Test.ExitExecutor do
+  @moduledoc "Exits abnormally, to exercise the catch :exit boundary → failed."
+  @behaviour A2A.Server.AgentExecutor
+  @impl true
+  def execute(_ctx, _updater), do: exit(:boom)
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+end

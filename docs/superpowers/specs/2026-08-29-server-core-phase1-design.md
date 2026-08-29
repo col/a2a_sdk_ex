@@ -39,8 +39,8 @@ synchronous draining subscriber.
 - `A2A.Server.Execution` — the per-task process (one per `task_id`), plus its
   `Registry` and `DynamicSupervisor`.
 - `A2A.Server.TaskStore` — the persistence behaviour (Phase 1 implements
-  `save/2` + `get/2`; `list/2` and `delete/2` are declared but land with the
-  listing phase).
+  `save/2`, `get/2`, and `delete/2`; only `list/2` is deferred, declared as an
+  `@optional_callbacks` and landing with the listing phase).
 - `A2A.Server.TaskStore.ETS` — the default adapter.
 - `A2A.Server.TaskStore.ConformanceCase` — the shared behaviour-conformance test
   suite (per [persistence](../../architecture/persistence.md)) the ETS default
@@ -88,7 +88,7 @@ New `A2A.Server.*` namespace. Module layout:
 | `A2A.Server.Execution` | GenServer | One process per `task_id`; runs the executor. |
 | `A2A.Server.Execution.Supervisor` | DynamicSupervisor | Supervises execution processes (`:transient`). |
 | `A2A.Server.Execution.Registry` | Registry | `task_id → pid`, unique keys. |
-| `A2A.Server.TaskStore` | behaviour | `save/2`, `get/2` (`list/2`, `delete/2` deferred). |
+| `A2A.Server.TaskStore` | behaviour | `save/2`, `get/2`, `delete/2` (`list/2` deferred). |
 | `A2A.Server.TaskStore.ETS` | GenServer + impl | Default adapter; owns an ETS table. |
 | `A2A.Server.RequestHandler` | behaviour | Full RPC surface declared; subset optional-callback'd. |
 | `A2A.Server.DefaultHandler` | module | `send_message/2` (blocking) + `get_task/2`. |

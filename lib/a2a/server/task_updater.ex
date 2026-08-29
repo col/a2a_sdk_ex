@@ -89,6 +89,10 @@ defmodule A2A.Server.TaskUpdater do
       status: %TaskStatus{state: state, message: message}
     }
 
+    # Governs ENDING THE BLOCKING DRAIN (`DefaultHandler.drain/1`). Intentionally
+    # ADDS `:input_required` vs `ResultAssembler`'s freeze/terminal set — the
+    # drain must stop and return control to the caller when input is required,
+    # even though the task itself remains resumable (not frozen).
     emit(u, evt, state in [:completed, :failed, :canceled, :rejected, :input_required])
   end
 

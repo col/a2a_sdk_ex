@@ -14,7 +14,7 @@ defmodule A2A.Server.DefaultHandler do
 
   @impl true
   @spec send_message(A2A.Server.t(), SendMessageRequest.t()) ::
-          {:ok, Task.t() | Message.t()} | {:error, A2A.Error.t()}
+          {:ok, Task.t()} | {:error, A2A.Error.t()}
   def send_message(%A2A.Server{} = server, %SendMessageRequest{message: %Message{} = message} = req) do
     task_id = message.task_id || server.id_generator.()
     context_id = message.context_id || server.id_generator.()
@@ -42,7 +42,9 @@ defmodule A2A.Server.DefaultHandler do
 
       case Execution.start(server.dyn_sup, server.registry, arg) do
         {:ok, _pid} ->
-          drain(ResultAssembler.init(task_id, context_id))
+          result = drain(ResultAssembler.init(task_id, context_id))
+          :ok = Events.unsubscribe(server.pubsub, task_id)
+          result
 
         {:error, {:already_started, _}} ->
           {:error, %A2A.Error{code: :task_in_progress, message: "task already running"}}

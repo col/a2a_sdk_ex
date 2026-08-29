@@ -25,6 +25,9 @@ defmodule A2A.Server.Events do
   @spec subscribe(atom(), String.t()) :: :ok
   def subscribe(pubsub, task_id), do: Phoenix.PubSub.subscribe(pubsub, topic(task_id))
 
+  @spec unsubscribe(atom(), String.t()) :: :ok
+  def unsubscribe(pubsub, task_id), do: Phoenix.PubSub.unsubscribe(pubsub, topic(task_id))
+
   @spec broadcast(atom(), Event.t()) :: :ok
   def broadcast(pubsub, %Event{task_id: task_id} = event),
     do: Phoenix.PubSub.broadcast(pubsub, topic(task_id), event)
