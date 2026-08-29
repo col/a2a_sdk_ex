@@ -8,15 +8,6 @@ defmodule A2A.Test.Coverage do
   alias A2A.Types.Enums
 
   @deferred [
-    # Phase 2 — Agent card & discovery
-    %{message: "AgentCard", phase: 2, reason: "Phase 2: agent card & discovery"},
-    %{message: "AgentInterface", phase: 2, reason: "Phase 2: agent card & discovery"},
-    %{message: "AgentProvider", phase: 2, reason: "Phase 2: agent card & discovery"},
-    %{message: "AgentCapabilities", phase: 2, reason: "Phase 2: agent card & discovery"},
-    %{message: "AgentExtension", phase: 2, reason: "Phase 2: agent card & discovery"},
-    %{message: "AgentSkill", phase: 2, reason: "Phase 2: agent card & discovery"},
-    %{message: "AgentCardSignature", phase: 2, reason: "Phase 2: agent card & discovery"},
-    %{message: "GetExtendedAgentCardRequest", phase: 2, reason: "Phase 2: agent card & discovery"},
     # Phase 3 — Security schemes
     %{message: "SecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
     %{message: "APIKeySecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
