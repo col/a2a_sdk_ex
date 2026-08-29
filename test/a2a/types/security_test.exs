@@ -1,7 +1,8 @@
 defmodule A2A.Types.SecurityTest do
   use ExUnit.Case, async: true
   alias A2A.JSON
-  alias A2A.Types.{SecurityRequirement, StringList}
+  alias A2A.Test.Fixtures
+  alias A2A.Types.{APIKeySecurityScheme, SecurityRequirement, SecurityScheme, StringList}
 
   test "StringList round-trips" do
     sl = %StringList{list: ["read", "write"]}
@@ -105,7 +106,6 @@ defmodule A2A.Types.SecurityTest do
   end
 
   test "SecurityScheme uses exact proto json_name and dispatches on :kind" do
-    alias A2A.Types.{SecurityScheme, APIKeySecurityScheme}
     s = SecurityScheme.api_key(%APIKeySecurityScheme{location: "header", name: "X-API-Key"})
     assert s.kind == :api_key
     {:ok, io} = A2A.JSON.encode(s)
@@ -115,8 +115,7 @@ defmodule A2A.Types.SecurityTest do
   end
 
   test "SecurityScheme oauth2 arm round-trips" do
-    alias A2A.Types.SecurityScheme
-    s = SecurityScheme.oauth2(A2A.Test.Fixtures.oauth2_security_scheme())
+    s = SecurityScheme.oauth2(Fixtures.oauth2_security_scheme())
     assert s.kind == :oauth2
     {:ok, io} = A2A.JSON.encode(s)
     assert {:ok, ^s} = A2A.JSON.decode(IO.iodata_to_binary(io), SecurityScheme)

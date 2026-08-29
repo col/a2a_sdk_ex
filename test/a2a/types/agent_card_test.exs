@@ -11,7 +11,9 @@ defmodule A2A.Types.AgentCardTest do
     AgentInterface,
     AgentProvider,
     AgentSkill,
-    GetExtendedAgentCardRequest
+    GetExtendedAgentCardRequest,
+    SecurityRequirement,
+    SecurityScheme
   }
 
   test "AgentInterface struct + field spec" do
@@ -109,7 +111,7 @@ defmodule A2A.Types.AgentCardTest do
     assert %{
              proto_name: "security_requirements",
              number: 8,
-             type: :raw,
+             type: {:message, SecurityRequirement},
              cardinality: :repeated
            } = by_name.security_requirements
 
@@ -165,13 +167,17 @@ defmodule A2A.Types.AgentCardTest do
     assert %{proto_name: "capabilities", number: 7, type: {:message, AgentCapabilities}} =
              by_name.capabilities
 
-    assert %{proto_name: "security_schemes", number: 8, type: :raw, cardinality: :singular} =
-             by_name.security_schemes
+    assert %{
+             proto_name: "security_schemes",
+             number: 8,
+             type: {:map, :string, {:message, SecurityScheme}},
+             cardinality: :singular
+           } = by_name.security_schemes
 
     assert %{
              proto_name: "security_requirements",
              number: 9,
-             type: :raw,
+             type: {:message, SecurityRequirement},
              cardinality: :repeated
            } = by_name.security_requirements
 

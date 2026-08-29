@@ -214,7 +214,8 @@ defmodule A2A.Test.Fixtures do
       tags: ["weather", "forecast"],
       examples: ["What's the weather in Boston?"],
       input_modes: ["text/plain"],
-      output_modes: ["text/plain", "application/json"]
+      output_modes: ["text/plain", "application/json"],
+      security_requirements: [security_requirement()]
     }
   end
 
@@ -235,6 +236,8 @@ defmodule A2A.Test.Fixtures do
       version: "1.0.0",
       documentation_url: "https://example.com/docs",
       capabilities: agent_capabilities(),
+      security_schemes: %{"oauth" => security_scheme()},
+      security_requirements: [security_requirement()],
       default_input_modes: ["text/plain"],
       default_output_modes: ["text/plain", "application/json"],
       skills: [agent_skill()],

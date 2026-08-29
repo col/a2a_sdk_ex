@@ -45,4 +45,11 @@ defmodule A2A.JSONPropertyTest do
       assert {:ok, ^t} = JSON.decode(IO.iodata_to_binary(io), A2A.Types.Task)
     end
   end
+
+  property "decode(encode(x)) == x for SecurityScheme" do
+    check all(s <- Generators.security_scheme()) do
+      {:ok, io} = JSON.encode(s)
+      assert {:ok, ^s} = JSON.decode(IO.iodata_to_binary(io), A2A.Types.SecurityScheme)
+    end
+  end
 end

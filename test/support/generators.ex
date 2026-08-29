@@ -31,7 +31,16 @@ defmodule A2A.Test.Generators do
   import StreamData
   use ExUnitProperties
 
-  alias A2A.Types.{Artifact, Message, Part, Task, TaskStatus}
+  alias A2A.Types.{
+    APIKeySecurityScheme,
+    Artifact,
+    HTTPAuthSecurityScheme,
+    Message,
+    Part,
+    SecurityScheme,
+    Task,
+    TaskStatus
+  }
 
   @spec role() :: StreamData.t(A2A.Types.Enums.role())
   def role, do: member_of([:user, :agent])
@@ -121,5 +130,22 @@ defmodule A2A.Test.Generators do
         ) do
       %Task{id: id, status: status, artifacts: artifacts, history: history}
     end
+  end
+
+  @doc """
+  A `SecurityScheme` restricted to arms whose leaf structs have only scalar
+  fields with non-empty values, so the round-trip stays stable — no
+  empty-map/implicit-presence pitfalls.
+  """
+  @spec security_scheme() :: StreamData.t(A2A.Types.SecurityScheme.t())
+  def security_scheme do
+    one_of([
+      map(non_empty_string(), fn n ->
+        SecurityScheme.api_key(%APIKeySecurityScheme{location: "header", name: n})
+      end),
+      map(non_empty_string(), fn s ->
+        SecurityScheme.http_auth(%HTTPAuthSecurityScheme{scheme: s})
+      end)
+    ])
   end
 end
