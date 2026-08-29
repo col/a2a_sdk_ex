@@ -80,4 +80,68 @@ defmodule A2A.JSONTest do
     # here assert the helper directly if exposed, else covered by synthetic fixtures.
     assert JSON.encode_scalar(:int64, 9_000_000_000) == "9000000000"
   end
+
+  test "decode accepts camelCase and snake_case keys" do
+    {:ok, m1} = JSON.from_json_map(%{"messageId" => "m", "role" => "ROLE_USER"}, Message)
+    {:ok, m2} = JSON.from_json_map(%{"message_id" => "m", "role" => "ROLE_USER"}, Message)
+    assert m1 == m2
+    assert m1.message_id == "m" and m1.role == :user
+  end
+
+  test "decode enums accept name and integer, reject UNSPECIFIED" do
+    assert {:ok, %TaskStatus{state: :working}} =
+             JSON.from_json_map(%{"state" => "TASK_STATE_WORKING"}, TaskStatus)
+
+    assert {:ok, %TaskStatus{state: :working}} = JSON.from_json_map(%{"state" => 2}, TaskStatus)
+    assert {:error, _} = JSON.from_json_map(%{"state" => "TASK_STATE_UNSPECIFIED"}, TaskStatus)
+  end
+
+  test "decode base64 accepts standard, urlsafe, and unpadded" do
+    b = <<255, 240, 1>>
+
+    for enc <- [Base.encode64(b), Base.url_encode64(b), Base.encode64(b, padding: false)] do
+      assert {:ok, %Part{kind: :raw, raw: ^b}} = JSON.from_json_map(%{"raw" => enc}, Part)
+    end
+  end
+
+  test "decode sets the discriminator on unions" do
+    {:ok, sr} =
+      JSON.from_json_map(%{"statusUpdate" => %{"taskId" => "t"}}, A2A.Types.StreamResponse)
+
+    assert sr.kind == :status_update
+    assert sr.status_update.task_id == "t"
+  end
+
+  test "decode timestamp parses RFC3339 with offset to UTC DateTime" do
+    {:ok, ts} =
+      JSON.from_json_map(
+        %{"state" => "TASK_STATE_WORKING", "timestamp" => "2023-10-27T12:00:00+02:00"},
+        TaskStatus
+      )
+
+    assert ts.timestamp == ~U[2023-10-27 10:00:00Z]
+  end
+
+  test "decode/2 parses a JSON string" do
+    assert {:ok, %TaskStatus{state: :completed}} =
+             JSON.decode(~s({"state":"TASK_STATE_COMPLETED"}), TaskStatus)
+  end
+
+  test "round-trips a rich Task through encode |> decode" do
+    task = %Task{
+      id: "t1",
+      context_id: "c1",
+      status: %TaskStatus{state: :working, timestamp: ~U[2023-10-27 10:00:00Z]},
+      artifacts: [
+        %Artifact{
+          artifact_id: "a1",
+          parts: [Part.text("hi"), Part.raw(<<1, 2>>), Part.data(%{"k" => 1})]
+        }
+      ],
+      metadata: %{"m" => true}
+    }
+
+    {:ok, iodata} = JSON.encode(task)
+    assert {:ok, ^task} = JSON.decode(IO.iodata_to_binary(iodata), Task)
+  end
 end
