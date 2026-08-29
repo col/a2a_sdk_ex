@@ -1,0 +1,27 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with: {otp-version: "26", elixir-version: "1.16"}
+      - run: mix deps.get
+      - run: mix format --check-formatted
+      - run: mix credo --strict
+      - run: mix compile --warnings-as-errors
+      - run: mix test
+      - run: mix dialyzer
+  proto:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with: {otp-version: "26", elixir-version: "1.16"}
+      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - run: mix deps.get
+      - run: mix escript.install --force hex protobuf
+      - run: echo "$HOME/.mix/escripts" >> $GITHUB_PATH
+      - run: mix a2a.gen_proto
+      - run: mix test --only proto
