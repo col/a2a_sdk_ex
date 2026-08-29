@@ -420,3 +420,98 @@ defmodule A2A.Types.AuthenticationInfo do
     ]
   end
 end
+
+defmodule A2A.Types.SecurityScheme do
+  @moduledoc """
+  A security scheme: a tagged union over
+  `api_key | http_auth | oauth2 | open_id_connect | mtls`. Match on `:kind`.
+  Struct keys are the short idiomatic forms; proto field names (and thus the
+  proto3-JSON keys, e.g. `apiKeySecurityScheme`) are the verbose spec forms.
+  """
+  alias A2A.Types.{
+    APIKeySecurityScheme,
+    Field,
+    HTTPAuthSecurityScheme,
+    MutualTlsSecurityScheme,
+    OAuth2SecurityScheme,
+    OpenIdConnectSecurityScheme
+  }
+
+  @type kind :: :api_key | :http_auth | :oauth2 | :open_id_connect | :mtls
+  @type t :: %__MODULE__{
+          kind: kind | nil,
+          api_key: APIKeySecurityScheme.t() | nil,
+          http_auth: HTTPAuthSecurityScheme.t() | nil,
+          oauth2: OAuth2SecurityScheme.t() | nil,
+          open_id_connect: OpenIdConnectSecurityScheme.t() | nil,
+          mtls: MutualTlsSecurityScheme.t() | nil
+        }
+  defstruct [:kind, :api_key, :http_auth, :oauth2, :open_id_connect, :mtls]
+
+  @spec api_key(APIKeySecurityScheme.t()) :: t
+  def api_key(v), do: %__MODULE__{kind: :api_key, api_key: v}
+
+  @spec http_auth(HTTPAuthSecurityScheme.t()) :: t
+  def http_auth(v), do: %__MODULE__{kind: :http_auth, http_auth: v}
+
+  @spec oauth2(OAuth2SecurityScheme.t()) :: t
+  def oauth2(v), do: %__MODULE__{kind: :oauth2, oauth2: v}
+
+  @spec open_id_connect(OpenIdConnectSecurityScheme.t()) :: t
+  def open_id_connect(v), do: %__MODULE__{kind: :open_id_connect, open_id_connect: v}
+
+  @spec mtls(MutualTlsSecurityScheme.t()) :: t
+  def mtls(v), do: %__MODULE__{kind: :mtls, mtls: v}
+
+  @doc false
+  def __a2a_proto_name__, do: "SecurityScheme"
+  @doc false
+  def __a2a_discriminator__, do: :kind
+
+  @doc false
+  @spec __a2a_fields__() :: [Field.t()]
+  def __a2a_fields__ do
+    [
+      Field.new(
+        name: :api_key,
+        proto_name: "api_key_security_scheme",
+        number: 1,
+        type: {:message, APIKeySecurityScheme},
+        presence: :explicit,
+        oneof: {:scheme, :api_key}
+      ),
+      Field.new(
+        name: :http_auth,
+        proto_name: "http_auth_security_scheme",
+        number: 2,
+        type: {:message, HTTPAuthSecurityScheme},
+        presence: :explicit,
+        oneof: {:scheme, :http_auth}
+      ),
+      Field.new(
+        name: :oauth2,
+        proto_name: "oauth2_security_scheme",
+        number: 3,
+        type: {:message, OAuth2SecurityScheme},
+        presence: :explicit,
+        oneof: {:scheme, :oauth2}
+      ),
+      Field.new(
+        name: :open_id_connect,
+        proto_name: "open_id_connect_security_scheme",
+        number: 4,
+        type: {:message, OpenIdConnectSecurityScheme},
+        presence: :explicit,
+        oneof: {:scheme, :open_id_connect}
+      ),
+      Field.new(
+        name: :mtls,
+        proto_name: "mtls_security_scheme",
+        number: 5,
+        type: {:message, MutualTlsSecurityScheme},
+        presence: :explicit,
+        oneof: {:scheme, :mtls}
+      )
+    ]
+  end
+end

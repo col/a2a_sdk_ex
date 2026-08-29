@@ -32,6 +32,7 @@ defmodule A2A.Test.Fixtures do
     Part,
     PasswordOAuthFlow,
     SecurityRequirement,
+    SecurityScheme,
     SendMessageConfiguration,
     SendMessageRequest,
     SendMessageResponse,
@@ -80,7 +81,8 @@ defmodule A2A.Test.Fixtures do
       {OAuth2SecurityScheme, oauth2_security_scheme()},
       {OpenIdConnectSecurityScheme, open_id_connect_security_scheme()},
       {MutualTlsSecurityScheme, mutual_tls_security_scheme()},
-      {AuthenticationInfo, authentication_info()}
+      {AuthenticationInfo, authentication_info()},
+      {SecurityScheme, security_scheme()}
     ]
   end
 
@@ -316,4 +318,6 @@ defmodule A2A.Test.Fixtures do
   def mutual_tls_security_scheme, do: %MutualTlsSecurityScheme{description: "mTLS auth"}
 
   def authentication_info, do: %AuthenticationInfo{scheme: "Bearer", credentials: "push-token"}
+
+  def security_scheme, do: SecurityScheme.oauth2(oauth2_security_scheme())
 end

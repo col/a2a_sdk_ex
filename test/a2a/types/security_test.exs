@@ -103,4 +103,22 @@ defmodule A2A.Types.SecurityTest do
     {:ok, io} = A2A.JSON.encode(a)
     assert {:ok, ^a} = A2A.JSON.decode(IO.iodata_to_binary(io), AuthenticationInfo)
   end
+
+  test "SecurityScheme uses exact proto json_name and dispatches on :kind" do
+    alias A2A.Types.{SecurityScheme, APIKeySecurityScheme}
+    s = SecurityScheme.api_key(%APIKeySecurityScheme{location: "header", name: "X-API-Key"})
+    assert s.kind == :api_key
+    {:ok, io} = A2A.JSON.encode(s)
+    json = Jason.decode!(IO.iodata_to_binary(io))
+    assert Map.has_key?(json, "apiKeySecurityScheme")
+    assert {:ok, ^s} = A2A.JSON.decode(IO.iodata_to_binary(io), SecurityScheme)
+  end
+
+  test "SecurityScheme oauth2 arm round-trips" do
+    alias A2A.Types.SecurityScheme
+    s = SecurityScheme.oauth2(A2A.Test.Fixtures.oauth2_security_scheme())
+    assert s.kind == :oauth2
+    {:ok, io} = A2A.JSON.encode(s)
+    assert {:ok, ^s} = A2A.JSON.decode(IO.iodata_to_binary(io), SecurityScheme)
+  end
 end

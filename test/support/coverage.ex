@@ -8,8 +8,6 @@ defmodule A2A.Test.Coverage do
   alias A2A.Types.Enums
 
   @deferred [
-    # Phase 3 — Security schemes
-    %{message: "SecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
     # Phase 4 — Push notifications & task listing
     %{
       message: "TaskPushNotificationConfig",
