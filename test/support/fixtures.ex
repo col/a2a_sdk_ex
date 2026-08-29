@@ -14,15 +14,30 @@ defmodule A2A.Test.Fixtures do
     AgentInterface,
     AgentProvider,
     AgentSkill,
+    APIKeySecurityScheme,
     Artifact,
+    AuthenticationInfo,
+    AuthorizationCodeOAuthFlow,
+    ClientCredentialsOAuthFlow,
+    DeviceCodeOAuthFlow,
     GetExtendedAgentCardRequest,
     GetTaskRequest,
+    HTTPAuthSecurityScheme,
+    ImplicitOAuthFlow,
     Message,
+    MutualTlsSecurityScheme,
+    OAuth2SecurityScheme,
+    OAuthFlows,
+    OpenIdConnectSecurityScheme,
     Part,
+    PasswordOAuthFlow,
+    SecurityRequirement,
+    SecurityScheme,
     SendMessageConfiguration,
     SendMessageRequest,
     SendMessageResponse,
     StreamResponse,
+    StringList,
     Task,
     TaskArtifactUpdateEvent,
     TaskStatus,
@@ -52,7 +67,22 @@ defmodule A2A.Test.Fixtures do
       {AgentSkill, agent_skill()},
       {AgentCardSignature, agent_card_signature()},
       {AgentCard, agent_card()},
-      {GetExtendedAgentCardRequest, get_extended_agent_card_request()}
+      {GetExtendedAgentCardRequest, get_extended_agent_card_request()},
+      {StringList, string_list()},
+      {SecurityRequirement, security_requirement()},
+      {AuthorizationCodeOAuthFlow, authorization_code_oauth_flow()},
+      {ClientCredentialsOAuthFlow, client_credentials_oauth_flow()},
+      {ImplicitOAuthFlow, implicit_oauth_flow()},
+      {PasswordOAuthFlow, password_oauth_flow()},
+      {DeviceCodeOAuthFlow, device_code_oauth_flow()},
+      {OAuthFlows, oauth_flows()},
+      {APIKeySecurityScheme, api_key_security_scheme()},
+      {HTTPAuthSecurityScheme, http_auth_security_scheme()},
+      {OAuth2SecurityScheme, oauth2_security_scheme()},
+      {OpenIdConnectSecurityScheme, open_id_connect_security_scheme()},
+      {MutualTlsSecurityScheme, mutual_tls_security_scheme()},
+      {AuthenticationInfo, authentication_info()},
+      {SecurityScheme, security_scheme()}
     ]
   end
 
@@ -184,7 +214,8 @@ defmodule A2A.Test.Fixtures do
       tags: ["weather", "forecast"],
       examples: ["What's the weather in Boston?"],
       input_modes: ["text/plain"],
-      output_modes: ["text/plain", "application/json"]
+      output_modes: ["text/plain", "application/json"],
+      security_requirements: [security_requirement()]
     }
   end
 
@@ -205,6 +236,8 @@ defmodule A2A.Test.Fixtures do
       version: "1.0.0",
       documentation_url: "https://example.com/docs",
       capabilities: agent_capabilities(),
+      security_schemes: %{"oauth" => security_scheme()},
+      security_requirements: [security_requirement()],
       default_input_modes: ["text/plain"],
       default_output_modes: ["text/plain", "application/json"],
       skills: [agent_skill()],
@@ -214,4 +247,80 @@ defmodule A2A.Test.Fixtures do
   end
 
   def get_extended_agent_card_request, do: %GetExtendedAgentCardRequest{tenant: "tenant-1"}
+
+  def string_list, do: %StringList{list: ["read", "write"]}
+
+  def security_requirement,
+    do: %SecurityRequirement{schemes: %{"oauth" => %StringList{list: ["read", "write"]}}}
+
+  def authorization_code_oauth_flow do
+    %AuthorizationCodeOAuthFlow{
+      authorization_url: "https://auth.example.com/authorize",
+      token_url: "https://auth.example.com/token",
+      refresh_url: "https://auth.example.com/refresh",
+      scopes: %{"read" => "Read access", "write" => "Write access"},
+      pkce_required: true
+    }
+  end
+
+  def client_credentials_oauth_flow do
+    %ClientCredentialsOAuthFlow{
+      token_url: "https://auth.example.com/token",
+      refresh_url: "https://auth.example.com/refresh",
+      scopes: %{"read" => "Read access"}
+    }
+  end
+
+  def implicit_oauth_flow do
+    %ImplicitOAuthFlow{
+      authorization_url: "https://auth.example.com/authorize",
+      refresh_url: "https://auth.example.com/refresh",
+      scopes: %{"read" => "Read access"}
+    }
+  end
+
+  def password_oauth_flow do
+    %PasswordOAuthFlow{
+      token_url: "https://auth.example.com/token",
+      refresh_url: "https://auth.example.com/refresh",
+      scopes: %{"read" => "Read access"}
+    }
+  end
+
+  def device_code_oauth_flow do
+    %DeviceCodeOAuthFlow{
+      device_authorization_url: "https://auth.example.com/device",
+      token_url: "https://auth.example.com/token",
+      refresh_url: "https://auth.example.com/refresh",
+      scopes: %{"read" => "Read access"}
+    }
+  end
+
+  def oauth_flows, do: OAuthFlows.authorization_code(authorization_code_oauth_flow())
+
+  def api_key_security_scheme,
+    do: %APIKeySecurityScheme{description: "API key auth", location: "header", name: "X-API-Key"}
+
+  def http_auth_security_scheme,
+    do: %HTTPAuthSecurityScheme{description: "Bearer auth", scheme: "Bearer", bearer_format: "JWT"}
+
+  def oauth2_security_scheme do
+    %OAuth2SecurityScheme{
+      description: "OAuth2 auth",
+      flows: oauth_flows(),
+      oauth2_metadata_url: "https://auth.example.com/.well-known/oauth-authorization-server"
+    }
+  end
+
+  def open_id_connect_security_scheme,
+    do: %OpenIdConnectSecurityScheme{
+      description: "OIDC",
+      open_id_connect_url: "https://oidc.example.com/.well-known/openid-configuration"
+    }
+
+  def mutual_tls_security_scheme, do: %MutualTlsSecurityScheme{description: "mTLS auth"}
+
+  def authentication_info, do: %AuthenticationInfo{scheme: "Bearer", credentials: "push-token"}
+
+  def security_scheme, do: SecurityScheme.oauth2(oauth2_security_scheme())
 end

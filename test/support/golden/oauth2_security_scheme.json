@@ -1,0 +1,14 @@
+{
+  "oauth2SecurityScheme": {
+    "description": "OAuth2 auth",
+    "flows": {
+      "authorizationCode": {
+        "authorizationUrl": "https://auth.example.com/authorize",
+        "tokenUrl": "https://auth.example.com/token",
+        "scopes": { "read": "Read access" },
+        "pkceRequired": true
+      }
+    },
+    "oauth2MetadataUrl": "https://auth.example.com/.well-known/oauth-authorization-server"
+  }
+}

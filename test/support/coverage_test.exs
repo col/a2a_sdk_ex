@@ -16,22 +16,27 @@ defmodule A2A.Test.CoverageTest do
     StreamResponse ListTaskPushNotificationConfigsResponse
   )
 
-  test "covered set = the 20 Phase-1+2 messages + 2 enums" do
+  test "covered set = the 35 Phase-1+2+3 messages + 2 enums" do
     assert Coverage.covered() ==
              MapSet.new(~w(
                Message Task TaskStatus Part Artifact TaskStatusUpdateEvent TaskArtifactUpdateEvent
                StreamResponse SendMessageRequest SendMessageResponse SendMessageConfiguration GetTaskRequest
                AgentCard AgentInterface AgentProvider AgentCapabilities AgentExtension AgentSkill
                AgentCardSignature GetExtendedAgentCardRequest
+               SecurityRequirement StringList SecurityScheme
+               AuthorizationCodeOAuthFlow ClientCredentialsOAuthFlow ImplicitOAuthFlow
+               PasswordOAuthFlow DeviceCodeOAuthFlow OAuthFlows
+               APIKeySecurityScheme HTTPAuthSecurityScheme OAuth2SecurityScheme
+               OpenIdConnectSecurityScheme MutualTlsSecurityScheme AuthenticationInfo
                TaskState Role
              ))
   end
 
-  test "deferred lists exactly the 24 remaining messages with a phase and reason" do
-    assert MapSet.size(Coverage.deferred_names()) == 24
+  test "deferred lists exactly the 9 remaining messages with a phase and reason" do
+    assert MapSet.size(Coverage.deferred_names()) == 9
 
     for d <- Coverage.deferred() do
-      assert d.phase in 2..4
+      assert d.phase == 4
       assert is_binary(d.reason) and d.reason != ""
     end
   end

@@ -17,7 +17,9 @@ defmodule A2A.GoldenTest do
     {"task.json", A2A.Types.Task},
     {"part_file.json", A2A.Types.Part},
     {"stream_status_update.json", A2A.Types.StreamResponse},
-    {"agent_card.json", A2A.Types.AgentCard}
+    {"agent_card.json", A2A.Types.AgentCard},
+    {"oauth2_security_scheme.json", A2A.Types.SecurityScheme},
+    {"agent_card_secured.json", A2A.Types.AgentCard}
   ]
 
   for {file, module} <- @cases do

@@ -2,27 +2,12 @@ defmodule A2A.Test.Coverage do
   @moduledoc """
   Coverage manifest for the proto-conformance harness. `covered` is DERIVED from
   the loaded `A2A.Types.*` modules (so it cannot drift from the code); `@deferred`
-  is the explicit list of messages postponed to Phases 2–4.
+  is the explicit list of messages postponed to Phase 4.
   """
 
   alias A2A.Types.Enums
 
   @deferred [
-    # Phase 3 — Security schemes
-    %{message: "SecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "APIKeySecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "HTTPAuthSecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "OAuth2SecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "OpenIdConnectSecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "MutualTlsSecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "SecurityRequirement", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "OAuthFlows", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "AuthorizationCodeOAuthFlow", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "ClientCredentialsOAuthFlow", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "ImplicitOAuthFlow", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "PasswordOAuthFlow", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "DeviceCodeOAuthFlow", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "AuthenticationInfo", phase: 3, reason: "Phase 3: security schemes"},
     # Phase 4 — Push notifications & task listing
     %{
       message: "TaskPushNotificationConfig",
@@ -56,11 +41,10 @@ defmodule A2A.Test.Coverage do
       message: "SubscribeToTaskRequest",
       phase: 4,
       reason: "Phase 4: push notifications & task listing"
-    },
-    %{message: "StringList", phase: 4, reason: "Phase 4: push notifications & task listing"}
+    }
   ]
 
-  @spec deferred() :: [%{message: String.t(), phase: 2..4, reason: String.t()}]
+  @spec deferred() :: [%{message: String.t(), phase: 4, reason: String.t()}]
   def deferred, do: @deferred
 
   @spec deferred_names() :: MapSet.t(String.t())

@@ -135,7 +135,7 @@ end
 
 defmodule A2A.Types.AgentSkill do
   @moduledoc "A discrete capability an agent exposes."
-  alias A2A.Types.Field
+  alias A2A.Types.{Field, SecurityRequirement}
 
   @type t :: %__MODULE__{
           id: String.t() | nil,
@@ -145,7 +145,7 @@ defmodule A2A.Types.AgentSkill do
           examples: [String.t()],
           input_modes: [String.t()],
           output_modes: [String.t()],
-          security_requirements: [map()]
+          security_requirements: [SecurityRequirement.t()]
         }
   defstruct [
     :id,
@@ -190,12 +190,11 @@ defmodule A2A.Types.AgentSkill do
         type: :string,
         cardinality: :repeated
       ),
-      # security_requirements references a Phase-3 message; passthrough until Phase 3 builds the struct.
       Field.new(
         name: :security_requirements,
         proto_name: "security_requirements",
         number: 8,
-        type: :raw,
+        type: {:message, SecurityRequirement},
         cardinality: :repeated
       )
     ]
@@ -235,7 +234,9 @@ defmodule A2A.Types.AgentCard do
     AgentInterface,
     AgentProvider,
     AgentSkill,
-    Field
+    Field,
+    SecurityRequirement,
+    SecurityScheme
   }
 
   @type t :: %__MODULE__{
@@ -246,8 +247,8 @@ defmodule A2A.Types.AgentCard do
           version: String.t() | nil,
           documentation_url: String.t() | nil,
           capabilities: AgentCapabilities.t() | nil,
-          security_schemes: map() | nil,
-          security_requirements: [map()],
+          security_schemes: %{optional(String.t()) => SecurityScheme.t()} | nil,
+          security_requirements: [SecurityRequirement.t()],
           default_input_modes: [String.t()],
           default_output_modes: [String.t()],
           skills: [AgentSkill.t()],
@@ -307,21 +308,17 @@ defmodule A2A.Types.AgentCard do
         number: 7,
         type: {:message, AgentCapabilities}
       ),
-      # security_schemes is a proto map<string, SecurityScheme>, kept as :raw passthrough. Unlike the
-      # repeated-message fields below, the codec has no proto-map wire type today; Phase 3 must add
-      # dedicated map codec support, not just swap in a {:message, _} type.
       Field.new(
         name: :security_schemes,
         proto_name: "security_schemes",
         number: 8,
-        type: :raw
+        type: {:map, :string, {:message, SecurityScheme}}
       ),
-      # security_requirements references a Phase-3 message; passthrough until Phase 3 builds the struct.
       Field.new(
         name: :security_requirements,
         proto_name: "security_requirements",
         number: 9,
-        type: :raw,
+        type: {:message, SecurityRequirement},
         cardinality: :repeated
       ),
       Field.new(

@@ -27,6 +27,7 @@ defmodule A2A.Types.Field do
           | :raw
           | {:enum, :task_state | :role}
           | {:message, module}
+          | {:map, :string, wire}
 
   @type t :: %__MODULE__{
           name: atom,
