@@ -6,12 +6,24 @@ defmodule A2A.JSON do
   """
   alias A2A.Types.Enums
 
+  @doc """
+  Encodes an `A2A.Types.*` struct to proto3-JSON iodata.
+
+  Assumes `struct` was built via the `A2A.Types.*` constructors/literals (i.e.
+  every enum field holds a valid atom for its enum type and every nested
+  message field holds a valid nested struct). Given such a struct this always
+  succeeds; it is not a general-purpose validator. If an enum field holds an
+  atom that isn't a member of its enum, this raises `ArgumentError` (via
+  `A2A.Types.Enums.encode!/2`) rather than returning `{:error, _}`.
+  """
   @spec encode(struct) :: {:ok, iodata} | {:error, term}
   def encode(struct), do: struct |> to_json_map() |> Jason.encode()
 
+  @doc "Like `encode/1`, but returns iodata directly and raises on failure."
   @spec encode!(struct) :: iodata
   def encode!(struct), do: struct |> to_json_map() |> Jason.encode!()
 
+  @doc "Encodes an `A2A.Types.*` struct into a plain proto3-JSON-shaped map (no `Jason.encode/1` pass)."
   @spec to_json_map(struct) :: map
   def to_json_map(%module{} = struct) do
     Enum.reduce(module.__a2a_fields__(), %{}, fn field, acc ->
@@ -55,13 +67,39 @@ defmodule A2A.JSON do
   defp default(:int64), do: 0
   defp default(_), do: :__no_default__
 
-  defp format_timestamp(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+  defp format_timestamp(%DateTime{} = dt) do
+    case DateTime.shift_zone(dt, "Etc/UTC") do
+      {:ok, utc} ->
+        DateTime.to_iso8601(utc)
 
+      {:error, _} ->
+        # Fallback for time zone databases that can't shift a non-UTC source
+        # even toward "Etc/UTC" (shouldn't happen with the default UTC-only
+        # database, but keep the codec correct regardless): normalize the
+        # instant manually and rewrite the zone/offset fields to UTC.
+        total_offset = dt.utc_offset + dt.std_offset
+
+        dt
+        |> DateTime.add(-total_offset, :second)
+        |> Map.merge(%{utc_offset: 0, std_offset: 0, zone_abbr: "UTC", time_zone: "Etc/UTC"})
+        |> DateTime.to_iso8601()
+    end
+  end
+
+  @doc """
+  Decodes a proto3-JSON binary into an `A2A.Types.*` struct.
+
+  Accepts both camelCase and original proto field names, enum names or their
+  numeric tags, and any of the base64 variants (standard/URL-safe,
+  padded/unpadded). Returns `{:error, reason}` on malformed JSON or a value
+  that doesn't conform to the target struct's field spec.
+  """
   @spec decode(binary, module) :: {:ok, struct} | {:error, term}
   def decode(json, module) when is_binary(json) do
     with {:ok, map} <- Jason.decode(json), do: from_json_map(map, module)
   end
 
+  @doc "Like `decode/2`, but returns the struct directly and raises `ArgumentError` on failure."
   @spec decode!(binary, module) :: struct
   def decode!(json, module) do
     case decode(json, module) do
@@ -70,6 +108,7 @@ defmodule A2A.JSON do
     end
   end
 
+  @doc "Decodes a plain proto3-JSON-shaped map into an `A2A.Types.*` struct (no `Jason.decode/1` pass)."
   @spec from_json_map(map, module) :: {:ok, struct} | {:error, term}
   def from_json_map(map, module) when is_map(map) do
     fields = module.__a2a_fields__()
@@ -116,7 +155,14 @@ defmodule A2A.JSON do
   defp decode_scalar(:bool, v) when is_boolean(v), do: {:ok, v}
   defp decode_scalar(:int32, v) when is_integer(v), do: {:ok, v}
   defp decode_scalar(:int64, v) when is_integer(v), do: {:ok, v}
-  defp decode_scalar(:int64, v) when is_binary(v), do: {:ok, String.to_integer(v)}
+
+  defp decode_scalar(:int64, v) when is_binary(v) do
+    case Integer.parse(v) do
+      {n, ""} -> {:ok, n}
+      _ -> {:error, {:invalid_int64, v}}
+    end
+  end
+
   defp decode_scalar(:bytes, v) when is_binary(v), do: decode_base64(v)
   defp decode_scalar(:timestamp, v) when is_binary(v), do: decode_timestamp(v)
   defp decode_scalar(:struct, v) when is_map(v), do: {:ok, v}

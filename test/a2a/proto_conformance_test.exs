@@ -25,8 +25,14 @@ defmodule A2A.ProtoConformanceTest do
 
   alias A2A.JSON
   alias A2A.Test.{Coverage, Fixtures}
+  alias A2A.Types.Enums
 
   @gen_file Path.join([__DIR__, "..", "support", "gen", "a2a.pb.ex"])
+
+  @enum_oracle %{
+    task_state: A2a.Oracle.Lf.A2a.V1.TaskState,
+    role: A2a.Oracle.Lf.A2a.V1.Role
+  }
 
   defp oracle_module(name), do: Module.concat([A2a, Oracle, Lf, A2a, V1, name])
 
@@ -114,6 +120,27 @@ defmodule A2A.ProtoConformanceTest do
         proto_name = module.__a2a_proto_name__()
         oracle = oracle_module(proto_name)
         assert_fields_match(module.__a2a_fields__(), oracle)
+      end
+    end
+
+    test "every covered enum's values match the proto descriptor (minus UNSPECIFIED)" do
+      for {enum, oracle_mod} <- @enum_oracle do
+        Code.ensure_loaded!(oracle_mod)
+
+        oracle_names =
+          oracle_mod.mapping()
+          |> Map.keys()
+          |> Enum.map(&Atom.to_string/1)
+          |> Enum.reject(&String.ends_with?(&1, "_UNSPECIFIED"))
+          |> MapSet.new()
+
+        ours =
+          Enums.atoms(enum)
+          |> Enum.map(&Enums.encode!(enum, &1))
+          |> MapSet.new()
+
+        assert ours == oracle_names,
+               "#{enum}: SDK values #{inspect(MapSet.to_list(ours))} != proto values #{inspect(MapSet.to_list(oracle_names))}"
       end
     end
   end

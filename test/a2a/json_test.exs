@@ -52,6 +52,18 @@ defmodule A2A.JSONTest do
     assert jmap(%TaskStatus{state: :working, timestamp: ts})["timestamp"] == "2023-10-27T10:00:00Z"
   end
 
+  test "Timestamp with a non-UTC offset normalizes to Z at the correct instant" do
+    {:ok, plus_two, 7200} = DateTime.from_iso8601("2023-10-27T12:00:00+02:00")
+    encoded = jmap(%TaskStatus{state: :working, timestamp: plus_two})["timestamp"]
+    assert encoded == "2023-10-27T10:00:00Z"
+
+    assert {:ok, %TaskStatus{state: :working, timestamp: ~U[2023-10-27 10:00:00Z]}} =
+             JSON.from_json_map(
+               %{"state" => "TASK_STATE_WORKING", "timestamp" => encoded},
+               TaskStatus
+             )
+  end
+
   test "nested messages and repeated fields recurse" do
     t = %Task{
       id: "t1",
@@ -84,6 +96,8 @@ defmodule A2A.JSONTest do
              JSON.from_json_map(%{"big" => "9000000000"}, A2A.Test.SyntheticInt64)
 
     assert {:ok, %{big: 42}} = JSON.from_json_map(%{"big" => 42}, A2A.Test.SyntheticInt64)
+
+    assert {:error, _} = JSON.from_json_map(%{"big" => "not-a-number"}, A2A.Test.SyntheticInt64)
   end
 
   test "decode accepts camelCase and snake_case keys" do
