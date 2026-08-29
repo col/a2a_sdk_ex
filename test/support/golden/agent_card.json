@@ -1,0 +1,52 @@
+{
+  "name": "Weather Agent",
+  "description": "Provides weather forecasts",
+  "supportedInterfaces": [
+    {
+      "url": "https://agent.example.com/a2a",
+      "protocolBinding": "JSONRPC",
+      "tenant": "tenant-1",
+      "protocolVersion": "1.0"
+    }
+  ],
+  "provider": {
+    "url": "https://example.com",
+    "organization": "Example Org"
+  },
+  "version": "1.0.0",
+  "documentationUrl": "https://example.com/docs",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "extensions": [
+      {
+        "uri": "https://example.com/ext/streaming",
+        "description": "Streaming support extension",
+        "required": true,
+        "params": { "max_chunk_size": 1024 }
+      }
+    ],
+    "extendedAgentCard": true
+  },
+  "defaultInputModes": ["text/plain"],
+  "defaultOutputModes": ["text/plain", "application/json"],
+  "skills": [
+    {
+      "id": "skill-1",
+      "name": "Weather lookup",
+      "description": "Looks up current weather for a location",
+      "tags": ["weather", "forecast"],
+      "examples": ["What's the weather in Boston?"],
+      "inputModes": ["text/plain"],
+      "outputModes": ["text/plain", "application/json"]
+    }
+  ],
+  "signatures": [
+    {
+      "protected": "eyJhbGciOiJFUzI1NiJ9",
+      "signature": "MEUCIQDx...",
+      "header": { "kid": "key-1" }
+    }
+  ],
+  "iconUrl": "https://example.com/icon.png"
+}

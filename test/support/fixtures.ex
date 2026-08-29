@@ -7,7 +7,15 @@ defmodule A2A.Test.Fixtures do
   """
 
   alias A2A.Types.{
+    AgentCapabilities,
+    AgentCard,
+    AgentCardSignature,
+    AgentExtension,
+    AgentInterface,
+    AgentProvider,
+    AgentSkill,
     Artifact,
+    GetExtendedAgentCardRequest,
     GetTaskRequest,
     Message,
     Part,
@@ -36,7 +44,15 @@ defmodule A2A.Test.Fixtures do
       {SendMessageConfiguration, send_message_configuration()},
       {SendMessageRequest, send_message_request()},
       {SendMessageResponse, send_message_response()},
-      {GetTaskRequest, get_task_request()}
+      {GetTaskRequest, get_task_request()},
+      {AgentInterface, agent_interface()},
+      {AgentProvider, agent_provider()},
+      {AgentExtension, agent_extension()},
+      {AgentCapabilities, agent_capabilities()},
+      {AgentSkill, agent_skill()},
+      {AgentCardSignature, agent_card_signature()},
+      {AgentCard, agent_card()},
+      {GetExtendedAgentCardRequest, get_extended_agent_card_request()}
     ]
   end
 
@@ -128,4 +144,74 @@ defmodule A2A.Test.Fixtures do
   def send_message_response, do: SendMessageResponse.task(task())
 
   def get_task_request, do: %GetTaskRequest{tenant: "tenant-1", id: "task-1", history_length: 10}
+
+  def agent_interface do
+    %AgentInterface{
+      url: "https://agent.example.com/a2a",
+      protocol_binding: "JSONRPC",
+      tenant: "tenant-1",
+      protocol_version: "1.0"
+    }
+  end
+
+  def agent_provider do
+    %AgentProvider{url: "https://example.com", organization: "Example Org"}
+  end
+
+  def agent_extension do
+    %AgentExtension{
+      uri: "https://example.com/ext/streaming",
+      description: "Streaming support extension",
+      required: true,
+      params: %{"max_chunk_size" => 1024}
+    }
+  end
+
+  def agent_capabilities do
+    %AgentCapabilities{
+      streaming: true,
+      push_notifications: false,
+      extensions: [agent_extension()],
+      extended_agent_card: true
+    }
+  end
+
+  def agent_skill do
+    %AgentSkill{
+      id: "skill-1",
+      name: "Weather lookup",
+      description: "Looks up current weather for a location",
+      tags: ["weather", "forecast"],
+      examples: ["What's the weather in Boston?"],
+      input_modes: ["text/plain"],
+      output_modes: ["text/plain", "application/json"]
+    }
+  end
+
+  def agent_card_signature do
+    %AgentCardSignature{
+      protected: "eyJhbGciOiJFUzI1NiJ9",
+      signature: "MEUCIQDx...",
+      header: %{"kid" => "key-1"}
+    }
+  end
+
+  def agent_card do
+    %AgentCard{
+      name: "Weather Agent",
+      description: "Provides weather forecasts",
+      supported_interfaces: [agent_interface()],
+      provider: agent_provider(),
+      version: "1.0.0",
+      documentation_url: "https://example.com/docs",
+      capabilities: agent_capabilities(),
+      default_input_modes: ["text/plain"],
+      default_output_modes: ["text/plain", "application/json"],
+      skills: [agent_skill()],
+      signatures: [agent_card_signature()],
+      icon_url: "https://example.com/icon.png"
+    }
+  end
+
+  def get_extended_agent_card_request, do: %GetExtendedAgentCardRequest{tenant: "tenant-1"}
 end
