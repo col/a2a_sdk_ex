@@ -9,7 +9,7 @@ defmodule A2A.Server do
           dyn_sup: atom(),
           store: module(),
           scope: A2A.Scope.t(),
-          id_generator: (() -> String.t())
+          id_generator: (-> String.t())
         }
   defstruct [:name, :executor, :pubsub, :registry, :dyn_sup, :store, :scope, :id_generator]
 
