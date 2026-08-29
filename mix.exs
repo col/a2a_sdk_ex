@@ -47,6 +47,7 @@ defmodule A2A.MixProject do
       # Mirrors the gate that must always be green; the proto group needs the
       # protoc toolchain and is run separately via `mix test.proto`.
       precommit: [
+        "hex.audit",
         "format --check-formatted",
         "compile --warnings-as-errors",
         "credo --strict",

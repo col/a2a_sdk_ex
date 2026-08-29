@@ -25,7 +25,7 @@ coverage manifest.
 | Command | Purpose |
 | --- | --- |
 | `mix deps.get` | Fetch dependencies |
-| `mix precommit` | Run the full pre-push gate — format check, `compile --warnings-as-errors`, `credo --strict`, `test`, `dialyzer` (mirrors CI's toolchain-free `test` job). Run before pushing |
+| `mix precommit` | Run the full pre-push gate — `hex.audit`, format check, `compile --warnings-as-errors`, `credo --strict`, `test`, `dialyzer` (mirrors CI's toolchain-free `test` job). Run before pushing |
 | `mix test` | Run the suite. **Green with no extra toolchain** — proto tests are excluded by default |
 | `mix test.proto` (alias for `mix test --only proto`) | Run the proto-conformance harness (needs `protoc` + `protoc-gen-elixir`) |
 | `mix a2a.gen_proto` | Regenerate the throwaway proto oracle modules into `test/support/gen/` (git-ignored). **Not part of `mix compile`** |

@@ -8,6 +8,7 @@ jobs:
       - uses: erlef/setup-beam@v1
         with: {otp-version: "26", elixir-version: "1.16"}
       - run: mix deps.get
+      - run: mix hex.audit
       - run: mix format --check-formatted
       - run: mix credo --strict
       - run: mix compile --warnings-as-errors
