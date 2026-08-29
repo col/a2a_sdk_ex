@@ -1,0 +1,15 @@
+{
+  "tasks": [
+    {
+      "id": "task-golden-1",
+      "contextId": "ctx-golden-1",
+      "status": {
+        "state": "TASK_STATE_COMPLETED",
+        "timestamp": "2023-10-27T10:00:00Z"
+      }
+    }
+  ],
+  "nextPageToken": "next-cursor-1",
+  "pageSize": 25,
+  "totalSize": 100
+}

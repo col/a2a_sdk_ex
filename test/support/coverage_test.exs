@@ -16,7 +16,7 @@ defmodule A2A.Test.CoverageTest do
     StreamResponse ListTaskPushNotificationConfigsResponse
   )
 
-  test "covered set = the 35 Phase-1+2+3 messages + 2 enums" do
+  test "covered set = all 44 Phase-1+2+3+4 messages + 2 enums" do
     assert Coverage.covered() ==
              MapSet.new(~w(
                Message Task TaskStatus Part Artifact TaskStatusUpdateEvent TaskArtifactUpdateEvent
@@ -28,17 +28,17 @@ defmodule A2A.Test.CoverageTest do
                PasswordOAuthFlow DeviceCodeOAuthFlow OAuthFlows
                APIKeySecurityScheme HTTPAuthSecurityScheme OAuth2SecurityScheme
                OpenIdConnectSecurityScheme MutualTlsSecurityScheme AuthenticationInfo
+               TaskPushNotificationConfig GetTaskPushNotificationConfigRequest
+               DeleteTaskPushNotificationConfigRequest ListTaskPushNotificationConfigsRequest
+               ListTaskPushNotificationConfigsResponse
+               ListTasksRequest ListTasksResponse CancelTaskRequest SubscribeToTaskRequest
                TaskState Role
              ))
   end
 
-  test "deferred lists exactly the 9 remaining messages with a phase and reason" do
-    assert MapSet.size(Coverage.deferred_names()) == 9
-
-    for d <- Coverage.deferred() do
-      assert d.phase == 4
-      assert is_binary(d.reason) and d.reason != ""
-    end
+  test "deferred is empty — every proto message has a hand-written struct" do
+    assert MapSet.size(Coverage.deferred_names()) == 0
+    assert Coverage.deferred() == []
   end
 
   test "partition holds: covered and deferred are disjoint and cover all proto messages" do

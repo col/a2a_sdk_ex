@@ -34,11 +34,21 @@ defmodule A2A.Test.Generators do
   alias A2A.Types.{
     APIKeySecurityScheme,
     Artifact,
+    AuthenticationInfo,
+    CancelTaskRequest,
+    DeleteTaskPushNotificationConfigRequest,
+    GetTaskPushNotificationConfigRequest,
     HTTPAuthSecurityScheme,
+    ListTaskPushNotificationConfigsRequest,
+    ListTaskPushNotificationConfigsResponse,
+    ListTasksRequest,
+    ListTasksResponse,
     Message,
     Part,
     SecurityScheme,
+    SubscribeToTaskRequest,
     Task,
+    TaskPushNotificationConfig,
     TaskStatus
   }
 
@@ -147,5 +157,151 @@ defmodule A2A.Test.Generators do
         SecurityScheme.http_auth(%HTTPAuthSecurityScheme{scheme: s})
       end)
     ])
+  end
+
+  @doc "An optional positive int — safe for implicit-presence int32 fields (zero would be omitted)."
+  @spec positive_int() :: StreamData.t(integer() | nil)
+  def positive_int, do: one_of([constant(nil), integer(1..1_000_000)])
+
+  @doc "An optional int incl. 0 — safe for explicit-presence int32 fields (always emitted)."
+  @spec optional_int() :: StreamData.t(integer() | nil)
+  def optional_int, do: one_of([constant(nil), integer(0..1_000_000)])
+
+  @doc "An optional non-empty string — safe for implicit-presence string fields."
+  @spec optional_string() :: StreamData.t(String.t() | nil)
+  def optional_string, do: one_of([constant(nil), non_empty_string()])
+
+  @spec authentication_info() :: StreamData.t(A2A.Types.AuthenticationInfo.t())
+  def authentication_info do
+    gen all(scheme <- optional_string(), credentials <- optional_string()) do
+      %AuthenticationInfo{scheme: scheme, credentials: credentials}
+    end
+  end
+
+  @spec task_push_notification_config() :: StreamData.t(TaskPushNotificationConfig.t())
+  def task_push_notification_config do
+    gen all(
+          tenant <- optional_string(),
+          id <- optional_string(),
+          task_id <- optional_string(),
+          url <- optional_string(),
+          token <- optional_string(),
+          auth <- one_of([constant(nil), authentication_info()])
+        ) do
+      %TaskPushNotificationConfig{
+        tenant: tenant,
+        id: id,
+        task_id: task_id,
+        url: url,
+        token: token,
+        authentication: auth
+      }
+    end
+  end
+
+  @spec get_task_push_notification_config_request() ::
+          StreamData.t(GetTaskPushNotificationConfigRequest.t())
+  def get_task_push_notification_config_request do
+    gen all(tenant <- optional_string(), task_id <- optional_string(), id <- optional_string()) do
+      %GetTaskPushNotificationConfigRequest{tenant: tenant, task_id: task_id, id: id}
+    end
+  end
+
+  @spec delete_task_push_notification_config_request() ::
+          StreamData.t(DeleteTaskPushNotificationConfigRequest.t())
+  def delete_task_push_notification_config_request do
+    gen all(tenant <- optional_string(), task_id <- optional_string(), id <- optional_string()) do
+      %DeleteTaskPushNotificationConfigRequest{tenant: tenant, task_id: task_id, id: id}
+    end
+  end
+
+  @spec list_task_push_notification_configs_request() ::
+          StreamData.t(ListTaskPushNotificationConfigsRequest.t())
+  def list_task_push_notification_configs_request do
+    gen all(
+          task_id <- optional_string(),
+          page_size <- positive_int(),
+          page_token <- optional_string(),
+          tenant <- optional_string()
+        ) do
+      %ListTaskPushNotificationConfigsRequest{
+        task_id: task_id,
+        page_size: page_size,
+        page_token: page_token,
+        tenant: tenant
+      }
+    end
+  end
+
+  @spec list_task_push_notification_configs_response() ::
+          StreamData.t(ListTaskPushNotificationConfigsResponse.t())
+  def list_task_push_notification_configs_response do
+    gen all(
+          configs <- list_of(task_push_notification_config(), max_length: 2),
+          next <- optional_string()
+        ) do
+      %ListTaskPushNotificationConfigsResponse{configs: configs, next_page_token: next}
+    end
+  end
+
+  @spec list_tasks_request() :: StreamData.t(ListTasksRequest.t())
+  def list_tasks_request do
+    gen all(
+          tenant <- optional_string(),
+          context_id <- optional_string(),
+          status <- one_of([constant(nil), task_state()]),
+          page_size <- optional_int(),
+          page_token <- optional_string(),
+          history_length <- optional_int(),
+          ts <- one_of([constant(nil), timestamp()]),
+          include_artifacts <- one_of([constant(nil), boolean()])
+        ) do
+      %ListTasksRequest{
+        tenant: tenant,
+        context_id: context_id,
+        status: status,
+        page_size: page_size,
+        page_token: page_token,
+        history_length: history_length,
+        status_timestamp_after: ts,
+        include_artifacts: include_artifacts
+      }
+    end
+  end
+
+  @spec list_tasks_response() :: StreamData.t(ListTasksResponse.t())
+  def list_tasks_response do
+    gen all(
+          tasks <- list_of(task(), max_length: 2),
+          next <- optional_string(),
+          page_size <- positive_int(),
+          total_size <- positive_int()
+        ) do
+      %ListTasksResponse{
+        tasks: tasks,
+        next_page_token: next,
+        page_size: page_size,
+        total_size: total_size
+      }
+    end
+  end
+
+  @spec cancel_task_request() :: StreamData.t(CancelTaskRequest.t())
+  def cancel_task_request do
+    gen all(
+          tenant <- optional_string(),
+          id <- optional_string(),
+          metadata <-
+            one_of([constant(nil), map(metadata(), fn m -> if m == %{}, do: nil, else: m end)])
+        ) do
+      %CancelTaskRequest{tenant: tenant, id: id, metadata: metadata}
+    end
+  end
+
+  @spec subscribe_to_task_request() :: StreamData.t(SubscribeToTaskRequest.t())
+  def subscribe_to_task_request do
+    gen all(tenant <- optional_string(), id <- optional_string()) do
+      %SubscribeToTaskRequest{tenant: tenant, id: id}
+    end
   end
 end

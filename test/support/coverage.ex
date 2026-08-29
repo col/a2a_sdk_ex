@@ -2,47 +2,17 @@ defmodule A2A.Test.Coverage do
   @moduledoc """
   Coverage manifest for the proto-conformance harness. `covered` is DERIVED from
   the loaded `A2A.Types.*` modules (so it cannot drift from the code); `@deferred`
-  is the explicit list of messages postponed to Phase 4.
+  is the explicit list of messages postponed to a later phase.
+
+  `@deferred` is now empty — every proto message in the pinned v1.0 surface has a
+  hand-written struct. The empty list is retained as the drift guard: if a future
+  proto release adds a message, it appears in neither `covered` nor `deferred`
+  and the partition test fails loudly.
   """
 
   alias A2A.Types.Enums
 
-  @deferred [
-    # Phase 4 — Push notifications & task listing
-    %{
-      message: "TaskPushNotificationConfig",
-      phase: 4,
-      reason: "Phase 4: push notifications & task listing"
-    },
-    %{
-      message: "GetTaskPushNotificationConfigRequest",
-      phase: 4,
-      reason: "Phase 4: push notifications & task listing"
-    },
-    %{
-      message: "DeleteTaskPushNotificationConfigRequest",
-      phase: 4,
-      reason: "Phase 4: push notifications & task listing"
-    },
-    %{
-      message: "ListTaskPushNotificationConfigsRequest",
-      phase: 4,
-      reason: "Phase 4: push notifications & task listing"
-    },
-    %{
-      message: "ListTaskPushNotificationConfigsResponse",
-      phase: 4,
-      reason: "Phase 4: push notifications & task listing"
-    },
-    %{message: "ListTasksRequest", phase: 4, reason: "Phase 4: push notifications & task listing"},
-    %{message: "ListTasksResponse", phase: 4, reason: "Phase 4: push notifications & task listing"},
-    %{message: "CancelTaskRequest", phase: 4, reason: "Phase 4: push notifications & task listing"},
-    %{
-      message: "SubscribeToTaskRequest",
-      phase: 4,
-      reason: "Phase 4: push notifications & task listing"
-    }
-  ]
+  @deferred []
 
   @spec deferred() :: [%{message: String.t(), phase: 4, reason: String.t()}]
   def deferred, do: @deferred
