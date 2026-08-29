@@ -37,4 +37,4 @@ Full context and consequences for each: [decision records](docs/architecture/dec
 
 ## License
 
-TBD.
+Licensed under the [Apache License, Version 2.0](LICENSE).
