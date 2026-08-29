@@ -42,6 +42,12 @@ defmodule A2A.JSON do
     if list == [], do: :skip, else: {:emit, Enum.map(list, &encode_scalar(field.type, &1))}
   end
 
+  defp encode_field(%{type: {:map, :string, value_wire}}, map) when is_map(map) do
+    if map_size(map) == 0,
+      do: :skip,
+      else: {:emit, Map.new(map, fn {k, v} -> {k, encode_scalar(value_wire, v)} end)}
+  end
+
   defp encode_field(%{presence: :implicit, type: type} = _field, value) do
     if value == default(type), do: :skip, else: {:emit, encode_scalar(type, value)}
   end
@@ -147,6 +153,15 @@ defmodule A2A.JSON do
 
   defp decode_field(%{cardinality: :repeated} = field, list) when is_list(list) do
     reduce_ok(list, &decode_scalar(field.type, &1))
+  end
+
+  defp decode_field(%{type: {:map, :string, value_wire}}, raw) when is_map(raw) do
+    Enum.reduce_while(raw, {:ok, %{}}, fn {k, v}, {:ok, acc} ->
+      case decode_scalar(value_wire, v) do
+        {:ok, decoded} -> {:cont, {:ok, Map.put(acc, k, decoded)}}
+        {:error, _} = err -> {:halt, err}
+      end
+    end)
   end
 
   defp decode_field(field, raw), do: decode_scalar(field.type, raw)

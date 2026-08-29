@@ -23,12 +23,13 @@ defmodule A2A.Test.CoverageTest do
                StreamResponse SendMessageRequest SendMessageResponse SendMessageConfiguration GetTaskRequest
                AgentCard AgentInterface AgentProvider AgentCapabilities AgentExtension AgentSkill
                AgentCardSignature GetExtendedAgentCardRequest
+               SecurityRequirement StringList
                TaskState Role
              ))
   end
 
-  test "deferred lists exactly the 24 remaining messages with a phase and reason" do
-    assert MapSet.size(Coverage.deferred_names()) == 24
+  test "deferred lists exactly the 22 remaining messages with a phase and reason" do
+    assert MapSet.size(Coverage.deferred_names()) == 22
 
     for d <- Coverage.deferred() do
       assert d.phase in 2..4

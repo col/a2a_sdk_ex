@@ -19,10 +19,12 @@ defmodule A2A.Test.Fixtures do
     GetTaskRequest,
     Message,
     Part,
+    SecurityRequirement,
     SendMessageConfiguration,
     SendMessageRequest,
     SendMessageResponse,
     StreamResponse,
+    StringList,
     Task,
     TaskArtifactUpdateEvent,
     TaskStatus,
@@ -52,7 +54,9 @@ defmodule A2A.Test.Fixtures do
       {AgentSkill, agent_skill()},
       {AgentCardSignature, agent_card_signature()},
       {AgentCard, agent_card()},
-      {GetExtendedAgentCardRequest, get_extended_agent_card_request()}
+      {GetExtendedAgentCardRequest, get_extended_agent_card_request()},
+      {StringList, string_list()},
+      {SecurityRequirement, security_requirement()}
     ]
   end
 
@@ -214,4 +218,9 @@ defmodule A2A.Test.Fixtures do
   end
 
   def get_extended_agent_card_request, do: %GetExtendedAgentCardRequest{tenant: "tenant-1"}
+
+  def string_list, do: %StringList{list: ["read", "write"]}
+
+  def security_requirement,
+    do: %SecurityRequirement{schemes: %{"oauth" => %StringList{list: ["read", "write"]}}}
 end

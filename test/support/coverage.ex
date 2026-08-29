@@ -15,7 +15,6 @@ defmodule A2A.Test.Coverage do
     %{message: "OAuth2SecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
     %{message: "OpenIdConnectSecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
     %{message: "MutualTlsSecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "SecurityRequirement", phase: 3, reason: "Phase 3: security schemes"},
     %{message: "OAuthFlows", phase: 3, reason: "Phase 3: security schemes"},
     %{message: "AuthorizationCodeOAuthFlow", phase: 3, reason: "Phase 3: security schemes"},
     %{message: "ClientCredentialsOAuthFlow", phase: 3, reason: "Phase 3: security schemes"},
@@ -56,8 +55,7 @@ defmodule A2A.Test.Coverage do
       message: "SubscribeToTaskRequest",
       phase: 4,
       reason: "Phase 4: push notifications & task listing"
-    },
-    %{message: "StringList", phase: 4, reason: "Phase 4: push notifications & task listing"}
+    }
   ]
 
   @spec deferred() :: [%{message: String.t(), phase: 2..4, reason: String.t()}]
