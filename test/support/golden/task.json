@@ -1,0 +1,29 @@
+{
+  "id": "task-golden-1",
+  "contextId": "ctx-golden-1",
+  "status": {
+    "state": "TASK_STATE_COMPLETED",
+    "message": {
+      "messageId": "msg-golden-2",
+      "role": "ROLE_AGENT",
+      "parts": [{ "text": "Here is the forecast." }]
+    },
+    "timestamp": "2023-10-27T10:00:00Z"
+  },
+  "artifacts": [
+    {
+      "artifactId": "art-golden-1",
+      "name": "forecast",
+      "parts": [{ "text": "Sunny, 75F" }],
+      "metadata": { "confidence": 0.9 }
+    }
+  ],
+  "history": [
+    {
+      "messageId": "msg-golden-1",
+      "role": "ROLE_USER",
+      "parts": [{ "text": "What is the weather in Boston?" }]
+    }
+  ],
+  "metadata": { "region": "us-east" }
+}

@@ -1,0 +1,13 @@
+{
+  "messageId": "msg-golden-1",
+  "contextId": "ctx-golden-1",
+  "taskId": "task-golden-1",
+  "role": "ROLE_USER",
+  "parts": [
+    { "text": "What is the weather in Boston?" },
+    { "data": { "unit": "fahrenheit" } }
+  ],
+  "metadata": { "priority": "high" },
+  "extensions": ["ext-a", "ext-b"],
+  "referenceTaskIds": ["task-golden-0"]
+}

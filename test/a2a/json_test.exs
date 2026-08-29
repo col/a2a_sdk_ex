@@ -75,10 +75,15 @@ defmodule A2A.JSONTest do
     assert Jason.decode!(IO.iodata_to_binary(iodata)) == %{"state" => "TASK_STATE_WORKING"}
   end
 
-  test "int64 synthetic rule: encoded as decimal string" do
-    # exercised via A2A.JSON.encode_scalar/2 indirectly in the int64 synthetic test module (Task 11);
-    # here assert the helper directly if exposed, else covered by synthetic fixtures.
+  test "int64 synthetic: encode as decimal string, decode from string or number" do
+    # int64 has no real covered proto field, so exercise the codec helpers directly
+    # via A2A.Test.SyntheticInt64 (test/support/synthetic_int64.ex).
     assert JSON.encode_scalar(:int64, 9_000_000_000) == "9000000000"
+
+    assert {:ok, %{big: 9_000_000_000}} =
+             JSON.from_json_map(%{"big" => "9000000000"}, A2A.Test.SyntheticInt64)
+
+    assert {:ok, %{big: 42}} = JSON.from_json_map(%{"big" => 42}, A2A.Test.SyntheticInt64)
   end
 
   test "decode accepts camelCase and snake_case keys" do
