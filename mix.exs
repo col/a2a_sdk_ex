@@ -19,7 +19,7 @@ defmodule A2A.MixProject do
       package: package(),
       docs: docs(),
       test_coverage: [tool: ExUnit],
-      preferred_cli_env: ["test.proto": :test]
+      preferred_cli_env: ["test.proto": :test, precommit: :test]
     ]
   end
 
@@ -41,7 +41,19 @@ defmodule A2A.MixProject do
   end
 
   defp aliases do
-    ["test.proto": ["test --only proto"]]
+    [
+      "test.proto": ["test --only proto"],
+      # Run everything CI's toolchain-free `test` job enforces, fast checks first.
+      # Mirrors the gate that must always be green; the proto group needs the
+      # protoc toolchain and is run separately via `mix test.proto`.
+      precommit: [
+        "format --check-formatted",
+        "compile --warnings-as-errors",
+        "credo --strict",
+        "test",
+        "dialyzer"
+      ]
+    ]
   end
 
   defp package do
