@@ -63,7 +63,19 @@ Recorded here so the roadmap stays legible (mirrors the 4-phase data-model
 split). Each is additive behind a boundary this phase establishes:
 
 1. **Streaming** — `send_message_stream/2`, `resubscribe/2`, SSE; `StreamResponse`
-   frames over the same event path.
+   frames over the same event path. **This phase also reshapes the drain.** The
+   Phase-1 blocking handler consumes events with a raw `receive` loop
+   (`DefaultHandler.drain/1`) — correct because `send_message/2` runs in the
+   caller's process, which subscribed to the topic, so PubSub delivers `%Event{}`
+   straight to its mailbox. That inline `receive` only serves blocking mode and
+   assumes the caller's mailbox is "ours" (fine for a test process, awkward inside
+   a web-server-owned request process). Replace it with a subscription-backed
+   **`A2A.Server.EventStream`** (a `Stream.resource/3` that subscribes on start,
+   yields each `%Event{}`, and unsubscribes on halt/timeout). Both modes then
+   share one path: **blocking** = `Enum.reduce_while/3` folding the stream to the
+   terminal frame; **streaming** = pipe the same stream through the SSE encoder.
+   The idle-timeout and unsubscribe live inside the stream resource, in one tested
+   place, rather than inline in the handler.
 2. **Cancellation** — `cancel_task/2`, Registry lookup → cancel message →
    `AgentExecutor.cancel/2`, hard-timeout escalation.
 3. **HTTP transports** — `A2A.Plug.Router` (JSON-RPC + REST), agent-card endpoint
@@ -73,6 +85,17 @@ split). Each is additive behind a boundary this phase establishes:
 5. **Task listing** — `list_tasks/2` + store query surface.
 6. **Extensions & real auth** — `A2A-Extensions` negotiation, `user_resolver`
    hook wired to a real identity.
+7. **Configurable drain timeout** — Phase 1 hardcodes `@drain_timeout 30_000` in
+   `DefaultHandler` as an **idle** timeout (it re-arms on every event via the
+   `receive/after` recursion, so it bounds silence between events, not total task
+   duration). Make it configurable: a server-level default (on the `A2A.Server`
+   handle / supervisor opts) plus a per-request override via
+   `SendMessageConfiguration`, including `:infinity`. Note the timeout abandons the
+   blocking *wait*, not the *task* — the execution process keeps running and
+   persists its terminal state, so a timed-out caller can still `get_task/2` the
+   result. The intended answer to genuinely long-running work is non-blocking /
+   streaming delivery, not a larger blocking timeout. (Pairs with the drain
+   reshape in item 1.)
 
 ## Architecture
 

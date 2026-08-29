@@ -10,6 +10,11 @@ defmodule A2A.Server.DefaultHandler do
   alias A2A.Server.Events.Event
   alias A2A.Types.{GetTaskRequest, Message, SendMessageRequest, Task}
 
+  # Idle timeout, not a total task budget: `receive/after` in drain/1 re-arms on
+  # every event, so this only fires after 30s of *silence*. Phase 1 hardcodes it;
+  # a follow-on phase makes it configurable (server default + per-request via
+  # SendMessageConfiguration, incl. :infinity). Long-running work belongs in the
+  # deferred non-blocking/streaming modes, not a larger timeout here.
   @drain_timeout 30_000
 
   @impl true
@@ -76,6 +81,12 @@ defmodule A2A.Server.DefaultHandler do
     end
   end
 
+  # Blocking drain: works because send_message/2 runs in the caller's process,
+  # which subscribed to the task topic before the execution started, so PubSub
+  # delivers %Event{}s to this mailbox. This raw `receive` only serves blocking
+  # mode. The streaming/transport phase replaces it with a subscription-backed
+  # Stream (A2A.Server.EventStream): blocking becomes Enum.reduce_while over the
+  # stream, streaming pipes the same stream to the SSE encoder — one shared path.
   defp drain(acc) do
     receive do
       %Event{payload: payload, terminal?: true} -> {:ok, ResultAssembler.apply(acc, payload)}
