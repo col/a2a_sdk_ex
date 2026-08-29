@@ -23,6 +23,11 @@ hand-written `A2A.Types.*` struct; the coverage manifest's `@deferred` list
 against future proto releases. This still covers data-model shapes and codec
 only — no server, transport, process, or socket behaviour yet.
 
+The **server runtime** (`A2A.Server.*`) is now underway — Phase 1 delivers the OTP
+walking skeleton (mountable supervision tree, process-per-task execution, PubSub
+event path, ETS `TaskStore`, and a blocking `DefaultHandler.send_message/get_task`).
+HTTP transports, streaming, cancellation, and push notifications are follow-on phases.
+
 ## Common commands
 
 | Command | Purpose |
