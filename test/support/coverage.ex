@@ -9,31 +9,6 @@ defmodule A2A.Test.Coverage do
 
   @deferred [
     # Phase 4 — Push notifications & task listing
-    %{
-      message: "TaskPushNotificationConfig",
-      phase: 4,
-      reason: "Phase 4: push notifications & task listing"
-    },
-    %{
-      message: "GetTaskPushNotificationConfigRequest",
-      phase: 4,
-      reason: "Phase 4: push notifications & task listing"
-    },
-    %{
-      message: "DeleteTaskPushNotificationConfigRequest",
-      phase: 4,
-      reason: "Phase 4: push notifications & task listing"
-    },
-    %{
-      message: "ListTaskPushNotificationConfigsRequest",
-      phase: 4,
-      reason: "Phase 4: push notifications & task listing"
-    },
-    %{
-      message: "ListTaskPushNotificationConfigsResponse",
-      phase: 4,
-      reason: "Phase 4: push notifications & task listing"
-    },
     %{message: "ListTasksRequest", phase: 4, reason: "Phase 4: push notifications & task listing"},
     %{message: "ListTasksResponse", phase: 4, reason: "Phase 4: push notifications & task listing"},
     %{message: "CancelTaskRequest", phase: 4, reason: "Phase 4: push notifications & task listing"},
