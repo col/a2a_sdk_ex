@@ -15,10 +15,15 @@ defmodule A2A.Test.Fixtures do
     AgentProvider,
     AgentSkill,
     Artifact,
+    AuthorizationCodeOAuthFlow,
+    ClientCredentialsOAuthFlow,
+    DeviceCodeOAuthFlow,
     GetExtendedAgentCardRequest,
     GetTaskRequest,
+    ImplicitOAuthFlow,
     Message,
     Part,
+    PasswordOAuthFlow,
     SecurityRequirement,
     SendMessageConfiguration,
     SendMessageRequest,
@@ -56,7 +61,12 @@ defmodule A2A.Test.Fixtures do
       {AgentCard, agent_card()},
       {GetExtendedAgentCardRequest, get_extended_agent_card_request()},
       {StringList, string_list()},
-      {SecurityRequirement, security_requirement()}
+      {SecurityRequirement, security_requirement()},
+      {AuthorizationCodeOAuthFlow, authorization_code_oauth_flow()},
+      {ClientCredentialsOAuthFlow, client_credentials_oauth_flow()},
+      {ImplicitOAuthFlow, implicit_oauth_flow()},
+      {PasswordOAuthFlow, password_oauth_flow()},
+      {DeviceCodeOAuthFlow, device_code_oauth_flow()}
     ]
   end
 
@@ -223,4 +233,47 @@ defmodule A2A.Test.Fixtures do
 
   def security_requirement,
     do: %SecurityRequirement{schemes: %{"oauth" => %StringList{list: ["read", "write"]}}}
+
+  def authorization_code_oauth_flow do
+    %AuthorizationCodeOAuthFlow{
+      authorization_url: "https://auth.example.com/authorize",
+      token_url: "https://auth.example.com/token",
+      refresh_url: "https://auth.example.com/refresh",
+      scopes: %{"read" => "Read access", "write" => "Write access"},
+      pkce_required: true
+    }
+  end
+
+  def client_credentials_oauth_flow do
+    %ClientCredentialsOAuthFlow{
+      token_url: "https://auth.example.com/token",
+      refresh_url: "https://auth.example.com/refresh",
+      scopes: %{"read" => "Read access"}
+    }
+  end
+
+  def implicit_oauth_flow do
+    %ImplicitOAuthFlow{
+      authorization_url: "https://auth.example.com/authorize",
+      refresh_url: "https://auth.example.com/refresh",
+      scopes: %{"read" => "Read access"}
+    }
+  end
+
+  def password_oauth_flow do
+    %PasswordOAuthFlow{
+      token_url: "https://auth.example.com/token",
+      refresh_url: "https://auth.example.com/refresh",
+      scopes: %{"read" => "Read access"}
+    }
+  end
+
+  def device_code_oauth_flow do
+    %DeviceCodeOAuthFlow{
+      device_authorization_url: "https://auth.example.com/device",
+      token_url: "https://auth.example.com/token",
+      refresh_url: "https://auth.example.com/refresh",
+      scopes: %{"read" => "Read access"}
+    }
+  end
 end
