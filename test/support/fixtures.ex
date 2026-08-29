@@ -22,6 +22,7 @@ defmodule A2A.Test.Fixtures do
     GetTaskRequest,
     ImplicitOAuthFlow,
     Message,
+    OAuthFlows,
     Part,
     PasswordOAuthFlow,
     SecurityRequirement,
@@ -66,7 +67,8 @@ defmodule A2A.Test.Fixtures do
       {ClientCredentialsOAuthFlow, client_credentials_oauth_flow()},
       {ImplicitOAuthFlow, implicit_oauth_flow()},
       {PasswordOAuthFlow, password_oauth_flow()},
-      {DeviceCodeOAuthFlow, device_code_oauth_flow()}
+      {DeviceCodeOAuthFlow, device_code_oauth_flow()},
+      {OAuthFlows, oauth_flows()}
     ]
   end
 
@@ -276,4 +278,6 @@ defmodule A2A.Test.Fixtures do
       scopes: %{"read" => "Read access"}
     }
   end
+
+  def oauth_flows, do: OAuthFlows.authorization_code(authorization_code_oauth_flow())
 end

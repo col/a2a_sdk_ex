@@ -56,4 +56,20 @@ defmodule A2A.Types.SecurityTest do
     {:ok, io} = A2A.JSON.encode(f)
     assert {:ok, ^f} = A2A.JSON.decode(IO.iodata_to_binary(io), DeviceCodeOAuthFlow)
   end
+
+  test "OAuthFlows dispatches on :kind and round-trips" do
+    alias A2A.Types.{ClientCredentialsOAuthFlow, OAuthFlows}
+
+    flows =
+      OAuthFlows.client_credentials(%ClientCredentialsOAuthFlow{
+        token_url: "https://auth.example.com/token",
+        scopes: %{"read" => "Read"}
+      })
+
+    assert flows.kind == :client_credentials
+    {:ok, io} = A2A.JSON.encode(flows)
+    json = Jason.decode!(IO.iodata_to_binary(io))
+    assert Map.has_key?(json, "clientCredentials")
+    assert {:ok, ^flows} = A2A.JSON.decode(IO.iodata_to_binary(io), OAuthFlows)
+  end
 end

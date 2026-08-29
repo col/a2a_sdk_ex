@@ -15,7 +15,6 @@ defmodule A2A.Test.Coverage do
     %{message: "OAuth2SecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
     %{message: "OpenIdConnectSecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
     %{message: "MutualTlsSecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "OAuthFlows", phase: 3, reason: "Phase 3: security schemes"},
     %{message: "AuthenticationInfo", phase: 3, reason: "Phase 3: security schemes"},
     # Phase 4 — Push notifications & task listing
     %{
