@@ -2,7 +2,7 @@ defmodule A2A.Test.Coverage do
   @moduledoc """
   Coverage manifest for the proto-conformance harness. `covered` is DERIVED from
   the loaded `A2A.Types.*` modules (so it cannot drift from the code); `@deferred`
-  is the explicit list of messages postponed to Phases 2–4.
+  is the explicit list of messages postponed to Phase 4.
   """
 
   alias A2A.Types.Enums
@@ -44,7 +44,7 @@ defmodule A2A.Test.Coverage do
     }
   ]
 
-  @spec deferred() :: [%{message: String.t(), phase: 2..4, reason: String.t()}]
+  @spec deferred() :: [%{message: String.t(), phase: 4, reason: String.t()}]
   def deferred, do: @deferred
 
   @spec deferred_names() :: MapSet.t(String.t())

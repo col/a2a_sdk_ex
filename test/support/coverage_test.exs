@@ -36,7 +36,7 @@ defmodule A2A.Test.CoverageTest do
     assert MapSet.size(Coverage.deferred_names()) == 9
 
     for d <- Coverage.deferred() do
-      assert d.phase in 2..4
+      assert d.phase == 4
       assert is_binary(d.reason) and d.reason != ""
     end
   end
