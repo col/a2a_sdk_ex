@@ -52,4 +52,28 @@ defmodule A2A.JSONPropertyTest do
       assert {:ok, ^s} = JSON.decode(IO.iodata_to_binary(io), A2A.Types.SecurityScheme)
     end
   end
+
+  for {name, gen_fun, module} <- [
+        {"TaskPushNotificationConfig", :task_push_notification_config,
+         A2A.Types.TaskPushNotificationConfig},
+        {"GetTaskPushNotificationConfigRequest", :get_task_push_notification_config_request,
+         A2A.Types.GetTaskPushNotificationConfigRequest},
+        {"DeleteTaskPushNotificationConfigRequest", :delete_task_push_notification_config_request,
+         A2A.Types.DeleteTaskPushNotificationConfigRequest},
+        {"ListTaskPushNotificationConfigsRequest", :list_task_push_notification_configs_request,
+         A2A.Types.ListTaskPushNotificationConfigsRequest},
+        {"ListTaskPushNotificationConfigsResponse", :list_task_push_notification_configs_response,
+         A2A.Types.ListTaskPushNotificationConfigsResponse},
+        {"ListTasksRequest", :list_tasks_request, A2A.Types.ListTasksRequest},
+        {"ListTasksResponse", :list_tasks_response, A2A.Types.ListTasksResponse},
+        {"CancelTaskRequest", :cancel_task_request, A2A.Types.CancelTaskRequest},
+        {"SubscribeToTaskRequest", :subscribe_to_task_request, A2A.Types.SubscribeToTaskRequest}
+      ] do
+    property "decode(encode(x)) == x for #{name}" do
+      check all(x <- apply(Generators, unquote(gen_fun), [])) do
+        {:ok, io} = JSON.encode(x)
+        assert {:ok, ^x} = JSON.decode(IO.iodata_to_binary(io), unquote(module))
+      end
+    end
+  end
 end

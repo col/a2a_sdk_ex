@@ -18,12 +18,19 @@ defmodule A2A.Test.Fixtures do
     Artifact,
     AuthenticationInfo,
     AuthorizationCodeOAuthFlow,
+    CancelTaskRequest,
     ClientCredentialsOAuthFlow,
+    DeleteTaskPushNotificationConfigRequest,
     DeviceCodeOAuthFlow,
     GetExtendedAgentCardRequest,
+    GetTaskPushNotificationConfigRequest,
     GetTaskRequest,
     HTTPAuthSecurityScheme,
     ImplicitOAuthFlow,
+    ListTaskPushNotificationConfigsRequest,
+    ListTaskPushNotificationConfigsResponse,
+    ListTasksRequest,
+    ListTasksResponse,
     Message,
     MutualTlsSecurityScheme,
     OAuth2SecurityScheme,
@@ -38,8 +45,10 @@ defmodule A2A.Test.Fixtures do
     SendMessageResponse,
     StreamResponse,
     StringList,
+    SubscribeToTaskRequest,
     Task,
     TaskArtifactUpdateEvent,
+    TaskPushNotificationConfig,
     TaskStatus,
     TaskStatusUpdateEvent
   }
@@ -82,7 +91,16 @@ defmodule A2A.Test.Fixtures do
       {OpenIdConnectSecurityScheme, open_id_connect_security_scheme()},
       {MutualTlsSecurityScheme, mutual_tls_security_scheme()},
       {AuthenticationInfo, authentication_info()},
-      {SecurityScheme, security_scheme()}
+      {SecurityScheme, security_scheme()},
+      {TaskPushNotificationConfig, task_push_notification_config()},
+      {GetTaskPushNotificationConfigRequest, get_task_push_notification_config_request()},
+      {DeleteTaskPushNotificationConfigRequest, delete_task_push_notification_config_request()},
+      {ListTaskPushNotificationConfigsRequest, list_task_push_notification_configs_request()},
+      {ListTaskPushNotificationConfigsResponse, list_task_push_notification_configs_response()},
+      {ListTasksRequest, list_tasks_request()},
+      {ListTasksResponse, list_tasks_response()},
+      {CancelTaskRequest, cancel_task_request()},
+      {SubscribeToTaskRequest, subscribe_to_task_request()}
     ]
   end
 
@@ -323,4 +341,62 @@ defmodule A2A.Test.Fixtures do
   def authentication_info, do: %AuthenticationInfo{scheme: "Bearer", credentials: "push-token"}
 
   def security_scheme, do: SecurityScheme.oauth2(oauth2_security_scheme())
+
+  def task_push_notification_config do
+    %TaskPushNotificationConfig{
+      tenant: "tenant-1",
+      id: "cfg-1",
+      task_id: "task-1",
+      url: "https://push.example.com/notify",
+      token: "push-token-1",
+      authentication: authentication_info()
+    }
+  end
+
+  def get_task_push_notification_config_request,
+    do: %GetTaskPushNotificationConfigRequest{tenant: "tenant-1", task_id: "task-1", id: "cfg-1"}
+
+  def delete_task_push_notification_config_request,
+    do: %DeleteTaskPushNotificationConfigRequest{tenant: "tenant-1", task_id: "task-1", id: "cfg-1"}
+
+  def list_task_push_notification_configs_request,
+    do: %ListTaskPushNotificationConfigsRequest{
+      task_id: "task-1",
+      page_size: 25,
+      page_token: "cursor-1",
+      tenant: "tenant-1"
+    }
+
+  def list_task_push_notification_configs_response,
+    do: %ListTaskPushNotificationConfigsResponse{
+      configs: [task_push_notification_config()],
+      next_page_token: "cursor-2"
+    }
+
+  def list_tasks_request do
+    %ListTasksRequest{
+      tenant: "tenant-1",
+      context_id: "ctx-1",
+      status: :working,
+      page_size: 50,
+      page_token: "cursor-1",
+      history_length: 10,
+      status_timestamp_after: DateTime.from_unix!(1_700_000_000),
+      include_artifacts: true
+    }
+  end
+
+  def list_tasks_response do
+    %ListTasksResponse{
+      tasks: [task()],
+      next_page_token: "cursor-2",
+      page_size: 25,
+      total_size: 100
+    }
+  end
+
+  def cancel_task_request,
+    do: %CancelTaskRequest{tenant: "tenant-1", id: "task-1", metadata: %{"reason" => "user"}}
+
+  def subscribe_to_task_request, do: %SubscribeToTaskRequest{tenant: "tenant-1", id: "task-1"}
 end
