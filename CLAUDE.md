@@ -9,16 +9,19 @@ building **A2A (Agent2Agent)** protocol-compliant agents. It is the Elixir
 counterpart to the official [Python](https://github.com/a2aproject/a2a-python)
 and [JS/TS](https://github.com/a2aproject/a2a-js) SDKs.
 
-**Phase 1 (current):** the typed foundation — hand-written `A2A.Types.*` structs
-for the core task/message flow, the `A2A.JSON` proto3-JSON codec, and a
-test-only proto-conformance harness. It has no dependency on any other SDK
-component, starts no processes, and opens no sockets. Runtime dependency graph
-is **`jason` only**.
+**The typed foundation** — hand-written `A2A.Types.*` structs for the full A2A
+v1.0 type surface, the `A2A.JSON` proto3-JSON codec, and a test-only
+proto-conformance harness. It has no dependency on any other SDK component,
+starts no processes, and opens no sockets. Runtime dependency graph is
+**`jason` only**.
 
-The full A2A v1.0 type surface (44 messages + 2 enums) is delivered across **4
-phases**; Phase 1 covers 12 core messages + both enums. Phases 2–4 (agent card,
-security schemes, push/listing) are tracked as explicit deferrals in the
-coverage manifest.
+The full A2A v1.0 type surface (44 messages + 2 enums) has been delivered
+across **4 phases** (Phase 1: 12 core messages + both enums; Phases 2–4: agent
+card, security schemes, and push/listing). Every proto message now has a
+hand-written `A2A.Types.*` struct; the coverage manifest's `@deferred` list
+(`test/support/coverage.ex`) is empty and is retained only as the drift guard
+against future proto releases. This still covers data-model shapes and codec
+only — no server, transport, process, or socket behaviour yet.
 
 ## Common commands
 
