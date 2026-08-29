@@ -3,7 +3,7 @@
 **Status:** approved (brainstorm), pending implementation plan
 **Date:** 2026-08-29
 **Feature:** Phase 1, first feature of the A2A Elixir SDK (`a2a`)
-**Branch:** `feature/data-model-and-codec` (off `main`)
+**Branch:** `feature/data-model-and-codec` (off `main`) — draft PR #2
 
 > Architecture context lives in [`docs/architecture.md`](../../architecture.md) and
 > its detail set (currently in PR #1, branch `sdk-architecture-planning`). This
@@ -13,27 +13,36 @@
 ## 1. Goal & scope
 
 Build the typed foundation of the SDK: hand-written idiomatic Elixir structs for
-the **full A2A v1.0 type surface**, plus the `A2A.JSON` proto3-JSON codec that
-owns all wire fidelity — and a **proto-driven validation harness** that proves
-those hand-written types are *complete* and *compliant* against the official A2A
+the A2A v1.0 type surface, plus the `A2A.JSON` proto3-JSON codec that owns all
+wire fidelity — and a **proto-driven validation harness** that proves those
+hand-written types are *complete* and *compliant* against the official A2A
 `.proto`, without generating the shipped types from it.
+
+The type surface is delivered across **four phases** (§2.1). **This spec is
+Phase 1**, which additionally builds the codec and the *entire* validation
+harness up front — the harness supports phasing via an explicit coverage manifest
+(§5.3) so later phases only add structs, not machinery.
 
 This is the foundation every later feature depends on. It has no dependency on
 any other SDK component and is built and tested in isolation.
 
-### In scope
+### In scope (Phase 1)
 
-- All 44 messages + 2 enums from A2A `a2a.proto` (package `lf.a2a.v1`,
-  proto3) as `A2A.Types.*` structs / atoms.
-- `A2A.JSON` — `encode/1` and `decode/2` implementing proto3-JSON.
-- A test-only proto-validation harness (completeness + compliance).
+- The **core task/message flow** structs (§2.1, 12 messages + 2 enums).
+- `A2A.JSON` — `encode/1` and `decode/2` implementing proto3-JSON (full rule set).
+- The **complete** test-only proto-validation harness (completeness + compliance),
+  including the coverage manifest that lets Phases 2–4 be tracked as explicit
+  deferrals.
 - Project scaffolding: `mix.exs`, deps, formatter, Credo, Dialyzer, CI, ExDoc.
 
-### Out of scope (later features, per the roadmap)
+### Out of scope
 
-Server behaviours (`AgentExecutor`, `RequestHandler`), transports/Plug,
-execution processes, persistence stores, telemetry, push notifications. Nothing
-in this feature starts a process or opens a socket.
+- **Phases 2–4 type structs** (agent card, security, push/listing — §2.1). They
+  are explicitly listed in the harness `@deferred` manifest so completeness stays
+  provable per phase.
+- Server behaviours (`AgentExecutor`, `RequestHandler`), transports/Plug,
+  execution processes, persistence stores, telemetry, push delivery. Nothing in
+  this feature starts a process or opens a socket.
 
 ## 2. Design decision recap (from brainstorm)
 
@@ -42,7 +51,8 @@ in this feature starts a process or opens a socket.
 | First feature | Data model + `A2A.JSON` codec |
 | Proto validation | **Approach 2** — generate throwaway proto modules in the test env as a differential oracle, plus a small golden-file backstop |
 | Proto toolchain | Dev/CI dependency (`protoc` + `protoc-gen-elixir`); generated code **never shipped** |
-| Type coverage | **Full v1.0 surface**; completeness test enforces 100% coverage |
+| Type coverage | Full v1.0 surface, delivered in **4 phases**; completeness test enforces the partition (§5.3) |
+| Phasing | Harness built in full in Phase 1; later phases add structs + move them from `@deferred` to covered |
 
 **Why validate against the proto rather than generate from it** — ADR-0004 keeps
 the public API idiomatic (atoms, tagged structs, snake_case) instead of leaking
@@ -52,29 +62,34 @@ authority into an enforced, self-maintaining guarantee: bump the pinned proto an
 completeness/compliance re-verify automatically — which is also how we absorb
 future proto releases.
 
+### 2.1 Phasing of the type surface (44 messages + 2 enums)
+
+| Phase | Concern | Messages / enums |
+| --- | --- | --- |
+| **1 (this spec)** | Core task/message flow | `Message`, `Task`, `TaskStatus`, `Part`, `Artifact`, `TaskStatusUpdateEvent`, `TaskArtifactUpdateEvent`, `StreamResponse`, `SendMessageRequest`, `SendMessageResponse`, `SendMessageConfiguration`, `GetTaskRequest`; enums `TaskState`, `Role` |
+| 2 | Agent card & discovery | `AgentCard`, `AgentInterface`, `AgentProvider`, `AgentCapabilities`, `AgentExtension`, `AgentSkill`, `AgentCardSignature`, `GetExtendedAgentCardRequest` |
+| 3 | Security schemes | `SecurityScheme`, `APIKeySecurityScheme`, `HTTPAuthSecurityScheme`, `OAuth2SecurityScheme`, `OpenIdConnectSecurityScheme`, `MutualTlsSecurityScheme`, `SecurityRequirement`, `OAuthFlows`, `AuthorizationCodeOAuthFlow`, `ClientCredentialsOAuthFlow`, `ImplicitOAuthFlow`, `PasswordOAuthFlow`, `DeviceCodeOAuthFlow`, `AuthenticationInfo` |
+| 4 | Push notifications & task listing | `TaskPushNotificationConfig`, `GetTaskPushNotificationConfigRequest`, `DeleteTaskPushNotificationConfigRequest`, `ListTaskPushNotificationConfigsRequest`, `ListTaskPushNotificationConfigsResponse`, `ListTasksRequest`, `ListTasksResponse`, `CancelTaskRequest`, `SubscribeToTaskRequest`, `StringList` |
+
+Phases 2–4 are separate specs/plans that each move their messages from `@deferred`
+to covered; they add no harness machinery.
+
 ## 3. The type surface (`A2A.Types.*`)
 
-44 messages + 2 enums, organized by concern (not one-file-per-message):
+Structs are organized by concern (not one-file-per-message). Phase 1 delivers the
+core-flow modules; later modules are noted for context.
 
 - **`A2A.Types.Message`, `.Task`, `.TaskStatus`, `.Part`, `.Artifact`** — core
-  conversation/task types.
+  conversation/task types. *(Phase 1)*
 - **`A2A.Types.Events`** — `TaskStatusUpdateEvent`, `TaskArtifactUpdateEvent`,
-  and the `StreamResponse` tagged union.
-- **`A2A.Types.AgentCard`** (+ `AgentInterface`, `AgentProvider`,
-  `AgentCapabilities`, `AgentExtension`, `AgentSkill`, `AgentCardSignature`).
-- **`A2A.Types.Security`** — `SecurityScheme` (5 variants: APIKey, HTTPAuth,
-  OAuth2, OpenIdConnect, MutualTls), `SecurityRequirement`, `OAuthFlows` + the 5
-  flow structs (AuthorizationCode, ClientCredentials, Implicit, Password,
-  DeviceCode), `AuthenticationInfo`.
-- **`A2A.Types.Requests`** — RPC request/response envelopes: `SendMessageRequest`,
-  `SendMessageResponse`, `GetTaskRequest`, `ListTasksRequest`,
-  `ListTasksResponse`, `CancelTaskRequest`, `SubscribeToTaskRequest`,
-  `GetTaskPushNotificationConfigRequest`,
-  `DeleteTaskPushNotificationConfigRequest`,
-  `ListTaskPushNotificationConfigsRequest`,
-  `ListTaskPushNotificationConfigsResponse`, `TaskPushNotificationConfig`,
-  `GetExtendedAgentCardRequest`, `SendMessageConfiguration`, `StringList`.
-- **`A2A.Types.Enums`** — `TaskState`, `Role` as atoms.
+  and the `StreamResponse` tagged union. *(Phase 1)*
+- **`A2A.Types.Requests`** — RPC envelopes. Phase 1: `SendMessageRequest`,
+  `SendMessageResponse`, `SendMessageConfiguration`, `GetTaskRequest`. Phase 4
+  adds the remaining request/response messages + `StringList`.
+- **`A2A.Types.Enums`** — `TaskState`, `Role` as atoms. *(Phase 1)*
+- **`A2A.Types.AgentCard`** (+ card sub-structs) — *(Phase 2)*.
+- **`A2A.Types.Security`** — scheme variants, flows, `AuthenticationInfo` —
+  *(Phase 3)*.
 
 ### Idiomatic choices
 
@@ -102,7 +117,8 @@ implementation-plan decision.
 
 Single module, public surface `encode/1` and `decode/2` (decode takes the target
 type/module). Transports and everything else call these and never touch JSON
-shape directly. Rules:
+shape directly. The **full rule set is built in Phase 1** (later phases add no
+codec logic, only structs). Rules:
 
 - **Field naming:** snake_case ⇄ camelCase.
 - **Enums:** atom ⇄ proto3-JSON SCREAMING_SNAKE string
@@ -120,9 +136,10 @@ JSON encoding/decoding of the outer document uses `jason`.
 
 ## 5. Proto-validation harness (test-only)
 
-Everything here is under `test/`; **nothing ships** in the compiled library.
+Everything here is under `test/`; **nothing ships** in the compiled library. Built
+in full in Phase 1.
 
-### Vendoring & codegen
+### 5.1 Vendoring & codegen
 
 - Vendor `specification/a2a.proto` (pinned to a specific A2A git ref, recorded in
   a `PROTO_VERSION` file) plus the required googleapis annotation protos
@@ -136,10 +153,10 @@ Everything here is under `test/`; **nothing ships** in the compiled library.
   `mix test` is always green with no toolchain; `mix test --only proto` (CI)
   requires the toolchain.
 
-### Tier 1 — Completeness (descriptor introspection)
+### 5.2 Tier 1 — Completeness (descriptor introspection)
 
-Load the generated modules' descriptors; for every proto message/field/enum
-assert:
+Load the generated modules' descriptors; for every proto message/field/enum that
+is **covered** (§5.3) assert:
 
 - a hand-written struct exists,
 - every proto field maps to a struct field (correct camelCase↔snake_case name and
@@ -147,12 +164,35 @@ assert:
 - no struct invents a field absent from the proto,
 - every enum value maps to an atom, and vice-versa.
 
-Green ⇒ provably complete. A pinned-proto bump surfaces new/renamed/removed
-fields as an exact diff.
+### 5.3 Coverage manifest & the partition rule
 
-### Tier 2 — Compliance (differential oracle + golden backstop)
+The mechanism that makes phasing safe. A checked-in manifest
+(`test/support/coverage.ex`) declares two sets:
 
-For representative instances of each type:
+- **`covered`** — messages/enums with hand-written structs (derived from the
+  `A2A.Types.*` modules, not a hand-maintained list, so it can't drift from the
+  code).
+- **`@deferred`** — an explicit list of `{message, phase, reason}` for messages
+  intentionally postponed (Phases 2–4 in §2.1).
+
+The completeness test asserts the **partition**:
+
+```
+proto_messages == covered ∪ deferred        (and covered ∩ deferred == ∅)
+```
+
+- A postponed message → on `@deferred` → green.
+- A message a **new proto release** introduces → in *neither* set → **red**, named
+  exactly. Drift is still caught even mid-phasing.
+
+Tier 2 (compliance) runs only over `covered`; Tier 1 completeness runs over *all*
+proto messages via the partition. As each later phase lands, its messages move
+from `@deferred` into `covered`; when `@deferred` is empty the full surface is
+proven complete.
+
+### 5.4 Tier 2 — Compliance (differential oracle + golden backstop)
+
+For representative instances of each **covered** type:
 
 - `A2A.JSON.encode(struct)` equals the generated proto module's proto3-JSON
   output, and round-trips both directions;
@@ -179,11 +219,13 @@ For representative instances of each type:
 
 TDD throughout (write the failing test first).
 
-- `test/a2a/types/*` — per-struct construction/validation unit tests.
+- `test/a2a/types/*` — per-struct construction/validation unit tests (Phase 1 set).
 - `test/a2a/json_test.exs` — codec unit tests, one per rule (enums, Struct/Value,
   Timestamp, bytes, unions, `_UNSPECIFIED` rejection, int64-as-string synthetic).
-- `test/a2a/proto_conformance_test.exs` — Tier 1 + Tier 2, tagged `:proto`.
-- `test/support/` — `stream_data` generators, fixtures, golden `.json` files.
+- `test/a2a/proto_conformance_test.exs` — Tier 1 (all messages, partition) + Tier 2
+  (covered messages), tagged `:proto`.
+- `test/support/` — `coverage.ex` manifest, `stream_data` generators, fixtures,
+  golden `.json` files.
 
 ## 8. Risks & mitigations
 
@@ -194,12 +236,16 @@ TDD throughout (write the failing test first).
   the everyday `mix test` and library build never require the toolchain.
 - **int64-as-string untested by real fields** → explicitly flagged; synthetic
   tests only, revisited if a future proto adds int64 fields.
+- **Silent completeness gaps while phasing** → the partition rule (§5.3) hard-fails
+  on any message that is neither covered nor explicitly deferred.
 
-## 9. Definition of done
+## 9. Definition of done (Phase 1)
 
-- All 44 messages + 2 enums exist as `A2A.Types.*` with field specs.
-- `A2A.JSON.encode/1` + `decode/2` implement every rule in §4.
-- `mix test` green with no toolchain; `mix test --only proto` green in CI with
-  Tier 1 completeness at 100% and Tier 2 compliance passing.
-- Golden-file round-trips pass byte-for-byte (modulo key order).
+- The Phase 1 core-flow messages + both enums exist as `A2A.Types.*` with field
+  specs; all other proto messages are listed in `@deferred` with a phase + reason.
+- `A2A.JSON.encode/1` + `decode/2` implement every rule in §4 (full set).
+- The full harness exists: `mix test` green with no toolchain; `mix test --only
+  proto` green in CI with the partition (§5.3) holding and Tier 2 compliance
+  passing over the covered set.
+- Golden-file round-trips pass byte-for-byte (modulo key order) for covered types.
 - CI (format, Credo, Dialyzer, both test jobs) green; ExDoc builds.
