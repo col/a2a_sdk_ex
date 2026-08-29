@@ -72,4 +72,35 @@ defmodule A2A.Types.SecurityTest do
     assert Map.has_key?(json, "clientCredentials")
     assert {:ok, ^flows} = A2A.JSON.decode(IO.iodata_to_binary(io), OAuthFlows)
   end
+
+  test "APIKeySecurityScheme round-trips" do
+    alias A2A.Types.APIKeySecurityScheme
+    s = %APIKeySecurityScheme{description: "key", location: "header", name: "X-API-Key"}
+    {:ok, io} = A2A.JSON.encode(s)
+    assert {:ok, ^s} = A2A.JSON.decode(IO.iodata_to_binary(io), APIKeySecurityScheme)
+  end
+
+  test "OAuth2SecurityScheme nests OAuthFlows" do
+    alias A2A.Types.{ClientCredentialsOAuthFlow, OAuth2SecurityScheme, OAuthFlows}
+
+    s = %OAuth2SecurityScheme{
+      description: "oauth",
+      flows:
+        OAuthFlows.client_credentials(%ClientCredentialsOAuthFlow{
+          token_url: "https://t",
+          scopes: %{}
+        }),
+      oauth2_metadata_url: "https://meta"
+    }
+
+    {:ok, io} = A2A.JSON.encode(s)
+    assert {:ok, ^s} = A2A.JSON.decode(IO.iodata_to_binary(io), OAuth2SecurityScheme)
+  end
+
+  test "AuthenticationInfo round-trips" do
+    alias A2A.Types.AuthenticationInfo
+    a = %AuthenticationInfo{scheme: "Bearer", credentials: "tok"}
+    {:ok, io} = A2A.JSON.encode(a)
+    assert {:ok, ^a} = A2A.JSON.decode(IO.iodata_to_binary(io), AuthenticationInfo)
+  end
 end

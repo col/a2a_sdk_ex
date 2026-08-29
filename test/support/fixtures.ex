@@ -14,15 +14,21 @@ defmodule A2A.Test.Fixtures do
     AgentInterface,
     AgentProvider,
     AgentSkill,
+    APIKeySecurityScheme,
     Artifact,
+    AuthenticationInfo,
     AuthorizationCodeOAuthFlow,
     ClientCredentialsOAuthFlow,
     DeviceCodeOAuthFlow,
     GetExtendedAgentCardRequest,
     GetTaskRequest,
+    HTTPAuthSecurityScheme,
     ImplicitOAuthFlow,
     Message,
+    MutualTlsSecurityScheme,
+    OAuth2SecurityScheme,
     OAuthFlows,
+    OpenIdConnectSecurityScheme,
     Part,
     PasswordOAuthFlow,
     SecurityRequirement,
@@ -68,7 +74,13 @@ defmodule A2A.Test.Fixtures do
       {ImplicitOAuthFlow, implicit_oauth_flow()},
       {PasswordOAuthFlow, password_oauth_flow()},
       {DeviceCodeOAuthFlow, device_code_oauth_flow()},
-      {OAuthFlows, oauth_flows()}
+      {OAuthFlows, oauth_flows()},
+      {APIKeySecurityScheme, api_key_security_scheme()},
+      {HTTPAuthSecurityScheme, http_auth_security_scheme()},
+      {OAuth2SecurityScheme, oauth2_security_scheme()},
+      {OpenIdConnectSecurityScheme, open_id_connect_security_scheme()},
+      {MutualTlsSecurityScheme, mutual_tls_security_scheme()},
+      {AuthenticationInfo, authentication_info()}
     ]
   end
 
@@ -280,4 +292,28 @@ defmodule A2A.Test.Fixtures do
   end
 
   def oauth_flows, do: OAuthFlows.authorization_code(authorization_code_oauth_flow())
+
+  def api_key_security_scheme,
+    do: %APIKeySecurityScheme{description: "API key auth", location: "header", name: "X-API-Key"}
+
+  def http_auth_security_scheme,
+    do: %HTTPAuthSecurityScheme{description: "Bearer auth", scheme: "Bearer", bearer_format: "JWT"}
+
+  def oauth2_security_scheme do
+    %OAuth2SecurityScheme{
+      description: "OAuth2 auth",
+      flows: oauth_flows(),
+      oauth2_metadata_url: "https://auth.example.com/.well-known/oauth-authorization-server"
+    }
+  end
+
+  def open_id_connect_security_scheme,
+    do: %OpenIdConnectSecurityScheme{
+      description: "OIDC",
+      open_id_connect_url: "https://oidc.example.com/.well-known/openid-configuration"
+    }
+
+  def mutual_tls_security_scheme, do: %MutualTlsSecurityScheme{description: "mTLS auth"}
+
+  def authentication_info, do: %AuthenticationInfo{scheme: "Bearer", credentials: "push-token"}
 end

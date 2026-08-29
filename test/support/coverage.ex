@@ -10,12 +10,6 @@ defmodule A2A.Test.Coverage do
   @deferred [
     # Phase 3 — Security schemes
     %{message: "SecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "APIKeySecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "HTTPAuthSecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "OAuth2SecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "OpenIdConnectSecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "MutualTlsSecurityScheme", phase: 3, reason: "Phase 3: security schemes"},
-    %{message: "AuthenticationInfo", phase: 3, reason: "Phase 3: security schemes"},
     # Phase 4 — Push notifications & task listing
     %{
       message: "TaskPushNotificationConfig",

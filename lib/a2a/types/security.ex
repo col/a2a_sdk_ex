@@ -278,3 +278,145 @@ defmodule A2A.Types.OAuthFlows do
     ]
   end
 end
+
+defmodule A2A.Types.APIKeySecurityScheme do
+  @moduledoc "API-key security scheme."
+  alias A2A.Types.Field
+
+  @type t :: %__MODULE__{
+          description: String.t() | nil,
+          location: String.t() | nil,
+          name: String.t() | nil
+        }
+  defstruct [:description, :location, :name]
+
+  @doc false
+  def __a2a_proto_name__, do: "APIKeySecurityScheme"
+
+  @doc false
+  @spec __a2a_fields__() :: [Field.t()]
+  def __a2a_fields__ do
+    [
+      Field.new(name: :description, proto_name: "description", number: 1, type: :string),
+      Field.new(name: :location, proto_name: "location", number: 2, type: :string),
+      Field.new(name: :name, proto_name: "name", number: 3, type: :string)
+    ]
+  end
+end
+
+defmodule A2A.Types.HTTPAuthSecurityScheme do
+  @moduledoc "HTTP-authentication security scheme."
+  alias A2A.Types.Field
+
+  @type t :: %__MODULE__{
+          description: String.t() | nil,
+          scheme: String.t() | nil,
+          bearer_format: String.t() | nil
+        }
+  defstruct [:description, :scheme, :bearer_format]
+
+  @doc false
+  def __a2a_proto_name__, do: "HTTPAuthSecurityScheme"
+
+  @doc false
+  @spec __a2a_fields__() :: [Field.t()]
+  def __a2a_fields__ do
+    [
+      Field.new(name: :description, proto_name: "description", number: 1, type: :string),
+      Field.new(name: :scheme, proto_name: "scheme", number: 2, type: :string),
+      Field.new(name: :bearer_format, proto_name: "bearer_format", number: 3, type: :string)
+    ]
+  end
+end
+
+defmodule A2A.Types.OAuth2SecurityScheme do
+  @moduledoc "OAuth 2.0 security scheme."
+  alias A2A.Types.{Field, OAuthFlows}
+
+  @type t :: %__MODULE__{
+          description: String.t() | nil,
+          flows: OAuthFlows.t() | nil,
+          oauth2_metadata_url: String.t() | nil
+        }
+  defstruct [:description, :flows, :oauth2_metadata_url]
+
+  @doc false
+  def __a2a_proto_name__, do: "OAuth2SecurityScheme"
+
+  @doc false
+  @spec __a2a_fields__() :: [Field.t()]
+  def __a2a_fields__ do
+    [
+      Field.new(name: :description, proto_name: "description", number: 1, type: :string),
+      Field.new(name: :flows, proto_name: "flows", number: 2, type: {:message, OAuthFlows}),
+      Field.new(
+        name: :oauth2_metadata_url,
+        proto_name: "oauth2_metadata_url",
+        number: 3,
+        type: :string
+      )
+    ]
+  end
+end
+
+defmodule A2A.Types.OpenIdConnectSecurityScheme do
+  @moduledoc "OpenID Connect security scheme."
+  alias A2A.Types.Field
+
+  @type t :: %__MODULE__{description: String.t() | nil, open_id_connect_url: String.t() | nil}
+  defstruct [:description, :open_id_connect_url]
+
+  @doc false
+  def __a2a_proto_name__, do: "OpenIdConnectSecurityScheme"
+
+  @doc false
+  @spec __a2a_fields__() :: [Field.t()]
+  def __a2a_fields__ do
+    [
+      Field.new(name: :description, proto_name: "description", number: 1, type: :string),
+      Field.new(
+        name: :open_id_connect_url,
+        proto_name: "open_id_connect_url",
+        number: 2,
+        type: :string
+      )
+    ]
+  end
+end
+
+defmodule A2A.Types.MutualTlsSecurityScheme do
+  @moduledoc "Mutual-TLS security scheme."
+  alias A2A.Types.Field
+
+  @type t :: %__MODULE__{description: String.t() | nil}
+  defstruct [:description]
+
+  @doc false
+  def __a2a_proto_name__, do: "MutualTlsSecurityScheme"
+
+  @doc false
+  @spec __a2a_fields__() :: [Field.t()]
+  def __a2a_fields__ do
+    [Field.new(name: :description, proto_name: "description", number: 1, type: :string)]
+  end
+end
+
+defmodule A2A.Types.AuthenticationInfo do
+  @moduledoc "Authentication info for push-notification delivery."
+  alias A2A.Types.Field
+
+  @type t :: %__MODULE__{scheme: String.t() | nil, credentials: String.t() | nil}
+  defstruct [:scheme, :credentials]
+
+  @doc false
+  def __a2a_proto_name__, do: "AuthenticationInfo"
+
+  @doc false
+  @spec __a2a_fields__() :: [Field.t()]
+  def __a2a_fields__ do
+    [
+      Field.new(name: :scheme, proto_name: "scheme", number: 1, type: :string),
+      Field.new(name: :credentials, proto_name: "credentials", number: 2, type: :string)
+    ]
+  end
+end
