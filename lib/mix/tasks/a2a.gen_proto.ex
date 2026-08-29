@@ -35,10 +35,10 @@ defmodule Mix.Tasks.A2a.GenProto do
 
   defp well_known_includes do
     # google_protos ships the well-known .proto files; add its priv dir if present.
-    case Application.app_dir(:google_protos) do
-      dir when is_binary(dir) -> ["-I", Path.join(dir, "priv/protos")]
-      _ -> []
-    end
+    # `Application.app_dir/1` always returns a path (or raises if the app is
+    # missing), so guard on the directory actually existing.
+    dir = Path.join(Application.app_dir(:google_protos), "priv/protos")
+    if File.dir?(dir), do: ["-I", dir], else: []
   rescue
     _ -> []
   end

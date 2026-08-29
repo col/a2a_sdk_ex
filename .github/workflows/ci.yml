@@ -21,7 +21,15 @@ jobs:
         with: {otp-version: "26", elixir-version: "1.16"}
       - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - run: mix deps.get
-      - run: mix escript.install --force hex protobuf
+      # The protoc-gen-elixir plugin MUST match the pinned `protobuf` lib so the
+      # generated oracle modules compile against it. Derive the version from
+      # mix.lock rather than floating to latest (which pulls a newer protobuf
+      # whose codegen/output differs and breaks the harness).
+      - name: Install protoc-gen-elixir matching the pinned protobuf dep
+        run: |
+          VSN=$(sed -n 's/.*:protobuf, "\([0-9][0-9.]*\)".*/\1/p' mix.lock | head -1)
+          echo "Installing protoc-gen-elixir $VSN"
+          mix escript.install --force hex protobuf "$VSN"
       - run: echo "$HOME/.mix/escripts" >> $GITHUB_PATH
       - run: mix a2a.gen_proto
       - run: mix test --only proto

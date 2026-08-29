@@ -27,7 +27,7 @@ defmodule A2A.ProtoConformanceTest do
   alias A2A.Test.{Coverage, Fixtures}
   alias A2A.Types.Enums
 
-  @gen_file Path.join([__DIR__, "..", "support", "gen", "a2a.pb.ex"])
+  @gen_dir Path.join([__DIR__, "..", "support", "gen"])
 
   @enum_oracle %{
     task_state: A2a.Oracle.Lf.A2a.V1.TaskState,
@@ -41,14 +41,28 @@ defmodule A2A.ProtoConformanceTest do
   # `:code.all_loaded/0`, which only reflects modules some other code path
   # has already touched.
   defp oracle_modules do
-    @gen_file
-    |> File.read!()
-    |> then(&Regex.scan(~r/defmodule\s+(A2a\.Oracle\.Lf\.A2a\.V1\.[A-Za-z0-9_.]+)\s+do/, &1))
-    |> Enum.map(fn [_, dotted] ->
-      mod = dotted |> String.split(".") |> Module.concat()
-      Code.ensure_loaded!(mod)
-      mod
-    end)
+    case Path.wildcard(Path.join(@gen_dir, "**/*.ex")) do
+      [] ->
+        raise """
+        No generated oracle modules found under #{@gen_dir}.
+        Run `mix a2a.gen_proto` (needs protoc + the protoc-gen-elixir plugin) \
+        before `mix test --only proto`.
+        """
+
+      files ->
+        files
+        |> Enum.flat_map(fn file ->
+          file
+          |> File.read!()
+          |> then(&Regex.scan(~r/defmodule\s+(A2a\.Oracle\.Lf\.A2a\.V1\.[A-Za-z0-9_.]+)\s+do/, &1))
+        end)
+        |> Enum.map(fn [_, dotted] ->
+          mod = dotted |> String.split(".") |> Module.concat()
+          Code.ensure_loaded!(mod)
+          mod
+        end)
+        |> Enum.uniq()
+    end
   end
 
   # All proto MESSAGE names (excludes enum types and synthetic map-entry
