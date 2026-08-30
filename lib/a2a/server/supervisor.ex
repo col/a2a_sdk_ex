@@ -27,7 +27,8 @@ defmodule A2A.Server.Supervisor do
       store: store,
       scope: Keyword.get(opts, :scope, A2A.Scope.default()),
       id_generator: Keyword.get(opts, :id_generator, &A2A.Server.default_id/0),
-      drain_timeout: Keyword.get(opts, :drain_timeout, :infinity)
+      drain_timeout: Keyword.get(opts, :drain_timeout, :infinity),
+      agent_card: Keyword.get(opts, :agent_card)
     }
 
     A2A.Server.put_handle(handle)

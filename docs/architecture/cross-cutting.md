@@ -76,8 +76,21 @@ per-transport rendering:
 
 Rendering:
 
-- `A2A.Error.to_jsonrpc/1` → JSON-RPC error object (code + message + data).
-- `A2A.Error.to_rest/1` → HTTP status + JSON body.
+- `A2A.Error.to_jsonrpc/1` — **landed** — renders a JSON-RPC error object
+  (`%{"code" => integer, "message" => binary, optional "data" => term}`). Code
+  mapping:
+
+  | Semantic error | JSON-RPC code |
+  | --- | --- |
+  | `:task_not_found` | `-32001` |
+  | `:task_not_continuable` / `:task_in_progress` / `:task_not_cancelable` | `-32002` |
+  | `:unsupported_operation` | `-32004` |
+  | `:content_type_not_supported` | `-32005` |
+  | `:invalid_agent_response` | `-32006` |
+  | internal / timeout / unmapped | `-32603` |
+
+- `A2A.Error.to_rest/1` → HTTP status + JSON body. **Pending** the REST
+  transport phase — not yet implemented.
 
 Errors are **tagged structs, not exceptions on the hot path** — the handler
 returns `{:error, %A2A.Error{}}` and the transport renders it. Unexpected raises

@@ -9,11 +9,13 @@ A peer of the official [Python](https://github.com/a2aproject/a2a-python) and
 architectural seams — but designed for the Elixir/OTP ecosystem rather than
 ported line-by-line.
 
-> **Status:** the typed foundation and the server-core runtime — blocking
+> **Status:** the typed foundation, the server-core runtime — blocking
 > `message/send`, streaming `message/stream` and `tasks/resubscribe` (shared
-> `EventStream`, configurable drain timeout) over the OTP process model — are
-> implemented; HTTP transports, cancel, and push are the next phases. Design
-> under [`docs/`](docs/architecture.md).
+> `EventStream`, configurable drain timeout) over the OTP process model — and
+> the JSON-RPC HTTP transport (`A2A.Plug.Router`/`A2A.Plug.SSE`, optional
+> `A2A.Standalone`) are implemented, with a runnable
+> [`examples/echo_server/`](examples/echo_server); REST, cancel, `tasks/list`,
+> and push are the next phases. Design under [`docs/`](docs/architecture.md).
 
 ## Design decisions
 
