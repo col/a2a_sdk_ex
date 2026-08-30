@@ -65,6 +65,20 @@ defmodule A2A.Plug.JSONRPCTest do
     assert {:error, %{"id" => 8, "error" => %{"code" => -32_602}}} = JSONRPC.dispatch(server, env)
   end
 
+  test "non-object params -> -32602", %{server: server} do
+    {:ok, env} =
+      JSONRPC.decode_envelope(
+        Jason.encode!(%{
+          "jsonrpc" => "2.0",
+          "id" => 9,
+          "method" => "message/send",
+          "params" => [1, 2]
+        })
+      )
+
+    assert {:error, %{"id" => 9, "error" => %{"code" => -32_602}}} = JSONRPC.dispatch(server, env)
+  end
+
   test "message/send happy path -> {:reply, result with a task}", %{server: server} do
     {:ok, env} = JSONRPC.decode_envelope(send_body("hi"))
     assert {:reply, %{"id" => 1, "result" => result}} = JSONRPC.dispatch(server, env)

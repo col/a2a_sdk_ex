@@ -42,7 +42,7 @@ defmodule A2A.Plug.JSONRPC do
     end
   end
 
-  defp decode_and_call(server, id, mod, kind, params) do
+  defp decode_and_call(server, id, mod, kind, params) when is_map(params) do
     case A2A.JSON.from_json_map(params, mod) do
       {:ok, req} ->
         call(server, id, kind, req)
@@ -51,6 +51,9 @@ defmodule A2A.Plug.JSONRPC do
         {:error, error_envelope(id, -32_602, "invalid params: #{inspect(reason)}")}
     end
   end
+
+  defp decode_and_call(_server, id, _mod, _kind, _params),
+    do: {:error, error_envelope(id, -32_602, "invalid params: expected an object")}
 
   # --- unary ---
   defp call(server, id, :unary, %SendMessageRequest{} = req) do

@@ -76,6 +76,20 @@ defmodule A2A.Plug.RouterTest do
     assert %{"error" => %{"code" => -32_601}} = Jason.decode!(conn.resp_body)
   end
 
+  test "POST oversized body -> -32600 with 200 envelope", %{opts: opts} do
+    # Plug's default read_body length limit is 8_000_000 bytes; exceed it so
+    # read_body/1 returns {:more, partial, conn} instead of {:ok, body, conn}.
+    oversized = String.duplicate("x", 8_000_050)
+
+    conn =
+      conn(:post, "/", oversized)
+      |> put_req_header("content-type", "application/json")
+      |> Router.call(opts)
+
+    assert conn.status == 200
+    assert %{"error" => %{"code" => -32_600}} = Jason.decode!(conn.resp_body)
+  end
+
   test "POST malformed JSON -> -32700", %{opts: opts} do
     conn =
       conn(:post, "/", "{bad")

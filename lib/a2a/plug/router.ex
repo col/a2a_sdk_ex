@@ -33,18 +33,27 @@ defmodule A2A.Plug.Router do
 
   post "/" do
     server = A2A.Server.handle(conn.assigns.init_opts[:server])
-    {:ok, body, conn} = read_body(conn)
 
-    case JSONRPC.decode_envelope(body) do
-      {:ok, env} ->
-        case JSONRPC.dispatch(server, env) do
-          {:reply, envelope} -> send_json(conn, 200, envelope)
-          {:error, envelope} -> send_json(conn, 200, envelope)
-          {:stream, id, enum} -> SSE.respond(conn, id, enum)
+    case read_body(conn) do
+      {:ok, body, conn} ->
+        case JSONRPC.decode_envelope(body) do
+          {:ok, env} ->
+            case JSONRPC.dispatch(server, env) do
+              {:reply, envelope} -> send_json(conn, 200, envelope)
+              {:error, envelope} -> send_json(conn, 200, envelope)
+              {:stream, id, enum} -> SSE.respond(conn, id, enum)
+            end
+
+          {:error, envelope} ->
+            send_json(conn, 200, envelope)
         end
 
-      {:error, envelope} ->
-        send_json(conn, 200, envelope)
+      {:more, _partial, conn} ->
+        send_json(conn, 200, %{
+          "jsonrpc" => "2.0",
+          "id" => nil,
+          "error" => %{"code" => -32_600, "message" => "request body too large"}
+        })
     end
   end
 

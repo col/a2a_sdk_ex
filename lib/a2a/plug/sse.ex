@@ -8,9 +8,12 @@ defmodule A2A.Plug.SSE do
   error surfaces as a normal JSON-RPC error envelope rather than a `200` stream
   that immediately fails. Once the first frame is in hand, headers go out and
   every frame (including the peeked one) is chunked as `data: <envelope>\\n\\n`.
-  A client disconnect (`chunk/2` error) stops iteration; the enumerable's
-  after-fun unsubscribes, so the execution keeps running and is re-attachable
-  via `tasks/resubscribe`.
+  A client disconnect surfaces as a `chunk/2` error, which stops iteration and
+  returns the (abandoned) `conn` without resuming the suspended continuation.
+  The PubSub subscription isn't unsubscribed explicitly at that point; it is
+  released when the Bandit request process terminates, since Phoenix.PubSub
+  auto-unsubscribes a subscriber on its `:DOWN`. The task execution keeps
+  running regardless and is re-attachable via `tasks/resubscribe`.
 
   The enumerable is a **single-use live PubSub subscription** — it is
   enumerated exactly once, via the `Enumerable.reduce/3` continuation, so a
