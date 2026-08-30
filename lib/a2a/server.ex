@@ -12,7 +12,8 @@ defmodule A2A.Server do
           store: module(),
           scope: A2A.Scope.t(),
           id_generator: (-> String.t()),
-          drain_timeout: timeout_opt()
+          drain_timeout: timeout_opt(),
+          agent_card: A2A.Types.AgentCard.t() | nil
         }
   defstruct [
     :name,
@@ -23,6 +24,7 @@ defmodule A2A.Server do
     :store,
     :scope,
     :id_generator,
+    :agent_card,
     drain_timeout: :infinity
   ]
 

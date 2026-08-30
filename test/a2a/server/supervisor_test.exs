@@ -41,4 +41,28 @@ defmodule A2A.Server.SupervisorTest do
 
     assert %A2A.Server{drain_timeout: 5_000} = A2A.Server.handle(name2)
   end
+
+  test "the server handle carries an :agent_card when configured" do
+    name = :"srv_card_#{System.unique_integer([:positive])}"
+    pubsub = :"pubsub_card_#{System.unique_integer([:positive])}"
+    card = %A2A.Types.AgentCard{name: "Echo", version: "0.1.0"}
+
+    start_supervised!(
+      {A2A.Server.Supervisor,
+       name: name, executor: A2A.Test.EchoExecutor, pubsub: pubsub, agent_card: card}
+    )
+
+    assert %A2A.Types.AgentCard{name: "Echo"} = A2A.Server.handle(name).agent_card
+  end
+
+  test "the agent_card defaults to nil when not configured" do
+    name = :"srv_nocard_#{System.unique_integer([:positive])}"
+    pubsub = :"pubsub_nocard_#{System.unique_integer([:positive])}"
+
+    start_supervised!(
+      {A2A.Server.Supervisor, name: name, executor: A2A.Test.EchoExecutor, pubsub: pubsub}
+    )
+
+    assert A2A.Server.handle(name).agent_card == nil
+  end
 end
