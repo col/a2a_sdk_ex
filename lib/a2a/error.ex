@@ -67,7 +67,12 @@ defmodule A2A.Error do
   """
   @spec to_jsonrpc(t()) :: %{required(String.t()) => term()}
   def to_jsonrpc(%__MODULE__{code: code, message: message, data: data}) do
-    jsonrpc = with %{jsonrpc: c} <- Map.get(@errors, code), do: c, else: (_ -> -32_603)
+    jsonrpc =
+      case Map.get(@errors, code) do
+        %{jsonrpc: c} -> c
+        _ -> -32_603
+      end
+
     base = %{"code" => jsonrpc, "message" => message}
     if is_nil(data), do: base, else: Map.put(base, "data", data)
   end
