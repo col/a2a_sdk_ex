@@ -24,10 +24,14 @@ against future proto releases. The typed foundation itself still covers only
 data-model shapes and codec — no transport, process, or socket behaviour — but
 see the server runtime paragraph below.
 
-The **server runtime** (`A2A.Server.*`) is now underway — Phase 1 delivers the OTP
+The **server runtime** (`A2A.Server.*`) is now underway. Phase 1 delivered the OTP
 walking skeleton (mountable supervision tree, process-per-task execution, PubSub
 event path, ETS `TaskStore`, and a blocking `DefaultHandler.send_message/get_task`).
-HTTP transports, streaming, cancellation, and push notifications are follow-on phases.
+Phase 2 adds streaming — `DefaultHandler.send_message_stream/2` and `resubscribe/2`,
+both served by the shared `A2A.Server.EventStream` (subscribe-and-yield with
+three-signal termination, see ADR-0009), plus a configurable, SDK-side
+`:drain_timeout` for the blocking path. HTTP transports, cancellation, and push
+notifications are follow-on phases.
 
 ## Common commands
 

@@ -304,4 +304,28 @@ defmodule A2A.Test.Generators do
       %SubscribeToTaskRequest{tenant: tenant, id: id}
     end
   end
+
+  @doc """
+  A valid `A2A.Test.ReplayExecutor` script: zero or more non-terminal steps
+  (`{:status, :working | :auth_required}`, `{:artifact, text}`) followed by
+  exactly one terminal step (`{:status, terminal_state}`) — so a stream driven
+  by the script always halts (see `A2A.Server.EventStream`'s terminal-event signal).
+  """
+  @spec valid_event_script() :: StreamData.t([{:status, atom()} | {:artifact, String.t()}])
+  def valid_event_script do
+    non_terminal_step =
+      one_of([
+        map(non_empty_string(), &{:artifact, &1}),
+        member_of([{:status, :working}, {:status, :auth_required}])
+      ])
+
+    terminal_state = member_of([:completed, :failed, :canceled, :rejected, :input_required])
+
+    gen all(
+          steps <- list_of(non_terminal_step, max_length: 5),
+          terminal <- terminal_state
+        ) do
+      steps ++ [{:status, terminal}]
+    end
+  end
 end

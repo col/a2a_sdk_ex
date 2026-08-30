@@ -130,6 +130,34 @@ responsibilities:
 5. **Non-blocking (polling):** return on the first `task`/`message` event; the
    client polls `tasks/get` or attaches later via `resubscribe`.
 
+### `drain_timeout`: blocking-only, SDK-side
+
+`send_message/3` accepts an SDK-side `:drain_timeout` option that bounds how
+long the blocking drain (over `A2A.Server.EventStream`) waits before giving up
+on a task that never reaches a terminal/`input_required` event:
+
+```elixir
+DefaultHandler.send_message(server, request, drain_timeout: 30_000)
+```
+
+- The server-wide default is set via `A2A.Server.Supervisor` init opts
+  (`drain_timeout: :infinity` unless overridden) and is available per request as
+  `server.drain_timeout`.
+- A caller may override it per call with the `drain_timeout:` option shown
+  above; passing `:infinity` disables the timeout for that call.
+- On expiry, `send_message/3` returns `{:error, %A2A.Error{code: :timeout}}`
+  unless the store already shows a terminal task (a caught executor raise
+  persists `failed` before the process exits, so that result is preferred over
+  a spurious timeout — see `DefaultHandler.resolve_blocking/3`).
+- This is deliberately **not** a field on the proto `SendMessageConfiguration`
+  message — it is a local execution-control knob for this SDK's drain loop, not
+  part of the A2A wire protocol, so it stays out of `A2A.Types.*` and out of the
+  request payload entirely.
+- `send_message_stream/2` and `resubscribe/2` do not use `drain_timeout` — they
+  always run their `EventStream` with `idle_timeout: :infinity`, since a
+  streaming/SSE consumer (not the drain loop) owns disconnect semantics; see
+  [ADR-0009](decisions/0009-eventstream-termination.md).
+
 ### Result assembly
 
 A result assembler folds the event stream into the current `Task` (artifacts
