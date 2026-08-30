@@ -47,6 +47,14 @@ defmodule A2A.Server.TaskUpdaterTest do
     }
   end
 
+  test "status transitions stamp a whole-second UTC timestamp", %{updater: u} do
+    u = TaskUpdater.start_work(u)
+    ts = u.task.status.timestamp
+    assert %DateTime{} = ts
+    assert ts.time_zone == "Etc/UTC"
+    assert ts.microsecond == {0, 0}
+  end
+
   defp json_roundtrip(struct) do
     with {:ok, json} <- A2A.JSON.encode(struct),
          {:ok, _} <- A2A.JSON.decode(json, struct.__struct__),
