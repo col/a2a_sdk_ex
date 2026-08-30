@@ -58,12 +58,21 @@ defmodule A2A.Server.Execution do
 
   @impl true
   def handle_call(:cancel, _from, %{arg: arg, updater: updater, child: child} = state) do
-    if ResultAssembler.terminal?(updater.task) do
-      {:reply, {:error, A2A.Error.not_cancelable(arg.task_id)}, state}
+    # `state.updater.task` is only set at init/1 and is NOT advanced by the child's
+    # execute/2 (the child runs on its own updater copy). Decide terminality from a
+    # FRESH store read so a task that just completed — while this process is still
+    # alive (the blocking drain returns on the terminal broadcast before we handle
+    # the child :DOWN) — is not overwritten with :canceled.
+    fresh = fresh_task(arg, updater)
+
+    if fresh && ResultAssembler.terminal?(fresh) do
+      {:reply, {:error, A2A.Error.not_cancelable(arg.task_id)},
+       %{state | updater: %{updater | task: fresh}}}
     else
       # Stop the in-flight author work (unlinked child) before settling.
       stop_child(child)
 
+      updater = %{updater | task: fresh || updater.task}
       updater = maybe_author_cancel(arg, updater)
 
       updater =
@@ -72,6 +81,13 @@ defmodule A2A.Server.Execution do
           else: TaskUpdater.update_status(updater, :canceled)
 
       {:stop, :normal, {:ok, updater.task}, %{state | updater: updater, child: nil}}
+    end
+  end
+
+  defp fresh_task(arg, updater) do
+    case updater.store.get(arg.task_id, updater.scope) do
+      {:ok, task} -> task
+      _ -> nil
     end
   end
 

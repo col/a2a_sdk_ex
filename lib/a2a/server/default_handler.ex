@@ -205,8 +205,11 @@ defmodule A2A.Server.DefaultHandler do
         try do
           GenServer.call(pid, :cancel)
         catch
-          # Process finished in the race window (completed before we called).
-          :exit, _ -> cancel_not_live(server, id)
+          # Process finished in the race window (completed/stopped before we called).
+          # Only "process is gone" exits fall back; a genuine call timeout (a still-
+          # running cancel) or any other exit propagates rather than double-writing.
+          :exit, {:noproc, _} -> cancel_not_live(server, id)
+          :exit, {:normal, _} -> cancel_not_live(server, id)
         end
 
       [] ->

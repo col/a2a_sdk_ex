@@ -51,6 +51,27 @@ defmodule A2A.Server.CancelTaskTest do
              DefaultHandler.cancel_task(server, %CancelTaskRequest{id: "nope"})
   end
 
+  test "cancel of a just-completed task -> not_cancelable, does not overwrite completed",
+       %{server: server} do
+    # Blocking send returns on the terminal broadcast, BEFORE the Execution process
+    # handles its child :DOWN and self-stops — so the process may still be registered
+    # and a cancel could take the live branch. The fresh-store-read terminal check
+    # must reject it and NOT overwrite the completed task with :canceled. Whether the
+    # process has already deregistered (cancel_not_live) or is still live is a race;
+    # both branches must yield the same result. Loop a few immediate cancels to make
+    # it likely we hit the still-live branch at least once.
+    {:ok, %{status: %{state: :completed}}} =
+      DefaultHandler.send_message(server, req("hi", task_id: "race1"))
+
+    for _ <- 1..5 do
+      assert {:error, %A2A.Error{code: :task_not_cancelable}} =
+               DefaultHandler.cancel_task(server, %CancelTaskRequest{id: "race1"})
+    end
+
+    assert {:ok, %{status: %{state: :completed}}} =
+             DefaultHandler.get_task(server, %A2A.Types.GetTaskRequest{id: "race1"})
+  end
+
   defp req(text, opts) do
     %SendMessageRequest{
       message: %Message{
