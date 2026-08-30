@@ -1,9 +1,12 @@
 defmodule A2A.Server.DefaultHandler do
   @moduledoc """
-  Batteries-included `RequestHandler`. Phase 1: blocking `send_message/2` and `get_task/2`.
-  It subscribes to the task topic *before* starting the execution process, then drains
-  the shared `A2A.Server.EventStream` through `ResultAssembler` to the terminal (or
-  `input_required`) frame.
+  Batteries-included `RequestHandler`. Implements the blocking `send_message/2` and
+  `get_task/2` path, plus the streaming `send_message_stream/2` and `resubscribe/2`
+  path. The blocking path subscribes to the task topic *before* starting the execution
+  process, then folds the shared `A2A.Server.EventStream` through `ResultAssembler` to
+  the terminal (or `input_required`) frame. The streaming path subscribes eagerly and
+  returns a lazy `EventStream`-backed enumerable — see the enumeration contract noted
+  on `send_message_stream/2` and `resubscribe/2`.
   """
   @behaviour A2A.Server.RequestHandler
 
@@ -66,6 +69,18 @@ defmodule A2A.Server.DefaultHandler do
   defp fold_event(%Event{payload: payload}, {_, acc}),
     do: {:cont, {:running, ResultAssembler.apply(acc, payload)}}
 
+  @doc """
+  Starts (or attaches to) execution and returns a lazy stream of `StreamResponse` frames.
+
+  Enumeration contract: subscription and execution start/lookup happen eagerly, in the
+  calling process, before this function returns — but the returned stream's `receive`
+  runs at *enumeration* time, in whichever process enumerates it. PubSub events are
+  delivered to the mailbox of the process that called `send_message_stream/2`, so the
+  returned enumerable **must be enumerated exactly once, by that same process**.
+  Enumerating it from a different process will miss events (they pile up in the
+  original caller's mailbox instead); never enumerating it leaks the subscription
+  until the calling process dies.
+  """
   @impl true
   @spec send_message_stream(A2A.Server.t(), SendMessageRequest.t()) ::
           Enumerable.t() | {:error, A2A.Error.t()}
@@ -102,6 +117,19 @@ defmodule A2A.Server.DefaultHandler do
   defp to_frame(%TaskStatusUpdateEvent{} = e), do: StreamResponse.status_update(e)
   defp to_frame(%TaskArtifactUpdateEvent{} = e), do: StreamResponse.artifact_update(e)
 
+  @doc """
+  Re-attaches to an in-flight (or already-settled) task and returns a lazy stream: a
+  snapshot frame followed by any live frames.
+
+  Enumeration contract: subscription and the store/registry reads happen eagerly, in
+  the calling process, before this function returns — but the returned stream's
+  `receive` runs at *enumeration* time, in whichever process enumerates it. PubSub
+  events are delivered to the mailbox of the process that called `resubscribe/2`, so
+  the returned enumerable **must be enumerated exactly once, by that same process**.
+  Enumerating it from a different process will miss events (they pile up in the
+  original caller's mailbox instead); never enumerating it leaks the subscription
+  until the calling process dies.
+  """
   @impl true
   @spec resubscribe(A2A.Server.t(), SubscribeToTaskRequest.t()) ::
           {:ok, Enumerable.t()} | {:error, A2A.Error.t()}
@@ -116,26 +144,39 @@ defmodule A2A.Server.DefaultHandler do
         {:error, A2A.Error.not_found(task_id)}
 
       {:ok, %Task{} = task} ->
-        snapshot = StreamResponse.task(task)
+        {snapshot_task, live} = resubscribe_attach(server, task_id, task)
+        {:ok, Stream.concat([StreamResponse.task(snapshot_task)], live)}
+    end
+  end
 
-        live =
-          case Registry.lookup(server.registry, task_id) do
-            [{pid, _}] ->
-              server.pubsub
-              |> EventStream.stream(task_id,
-                monitor: pid,
-                idle_timeout: :infinity,
-                subscribe?: false
-              )
-              |> Stream.map(&to_frame(&1.payload))
+  defp resubscribe_attach(server, task_id, task) do
+    case Registry.lookup(server.registry, task_id) do
+      [{pid, _}] ->
+        live_stream =
+          server.pubsub
+          |> EventStream.stream(task_id, monitor: pid, idle_timeout: :infinity, subscribe?: false)
+          |> Stream.map(&to_frame(&1.payload))
 
-            [] ->
-              # No live execution (task already settled) — snapshot suffices.
-              Events.unsubscribe(server.pubsub, task_id)
-              []
+        {task, live_stream}
+
+      [] ->
+        # No live execution now — but `task` was read BEFORE this lookup, so if the
+        # execution settled in that gap, Registry.lookup/2 returns `[]` (process
+        # exited) while `task` is the STALE pre-terminal snapshot — and the terminal
+        # event already buffered in this process's mailbox is about to be discarded
+        # by unsubscribe below. Re-read the store: the process can only have exited
+        # (making the lookup return `[]`) AFTER persisting its terminal state, so this
+        # fresh read is terminal by construction and closes the settle-between-read-
+        # and-lookup window. Fall back to the original snapshot if the fresh read
+        # somehow misses (shouldn't happen — the task existed a moment ago).
+        fresh_task =
+          case server.store.get(task_id, server.scope) do
+            {:ok, %Task{} = fresh} -> fresh
+            {:error, :not_found} -> task
           end
 
-        {:ok, Stream.concat([snapshot], live)}
+        Events.unsubscribe(server.pubsub, task_id)
+        {fresh_task, []}
     end
   end
 

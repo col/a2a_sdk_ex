@@ -82,4 +82,3 @@ injection and executor resumption.
   (ADR-0005) or the store projection (ADR-0007). Resubscribe's catch-up remains a
   single folded-snapshot frame because the store is a projection, not an event
   log.
-</content>

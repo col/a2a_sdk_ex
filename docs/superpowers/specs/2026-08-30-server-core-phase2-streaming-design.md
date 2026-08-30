@@ -299,5 +299,3 @@ Everyday `mix test` stays green with no new toolchain. New tests under
 - ADRs [0005](../../architecture/decisions/0005-pubsub-process-model.md),
   [0007](../../architecture/decisions/0007-ets-task-store.md), and new
   [0009](../../architecture/decisions/0009-eventstream-termination.md)
-</content>
-</invoke>
