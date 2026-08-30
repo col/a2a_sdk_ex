@@ -77,4 +77,22 @@ defmodule A2A.Plug.SSETest do
 
     assert %{"error" => %{"code" => -32_001}} = Jason.decode!(conn.resp_body)
   end
+
+  test "respond/4 uses a custom frame formatter (bare frame, no envelope)" do
+    frame =
+      A2A.Types.StreamResponse.task(%A2A.Types.Task{
+        id: "t",
+        status: %A2A.Types.TaskStatus{state: :working}
+      })
+
+    formatter = fn _id, f -> Jason.encode_to_iodata!(A2A.JSON.to_json_map(f)) end
+
+    conn =
+      Plug.Test.conn(:get, "/")
+      |> A2A.Plug.SSE.respond(nil, [frame], formatter)
+
+    # Body is an SSE data frame carrying the BARE StreamResponse (no "jsonrpc"/"id").
+    refute conn.resp_body =~ "jsonrpc"
+    assert conn.resp_body =~ "data:"
+  end
 end
