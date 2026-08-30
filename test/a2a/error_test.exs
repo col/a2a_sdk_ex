@@ -17,24 +17,24 @@ defmodule A2A.ErrorTest do
 
   describe "to_jsonrpc/1" do
     test "maps known semantic codes to A2A JSON-RPC codes" do
-      assert %{"code" => -32001} = A2A.Error.to_jsonrpc(A2A.Error.not_found("t"))
-      assert %{"code" => -32002} = A2A.Error.to_jsonrpc(A2A.Error.terminal_task("t"))
+      assert %{"code" => -32_001} = A2A.Error.to_jsonrpc(A2A.Error.not_found("t"))
+      assert %{"code" => -32_002} = A2A.Error.to_jsonrpc(A2A.Error.terminal_task("t"))
 
-      assert %{"code" => -32002} =
+      assert %{"code" => -32_002} =
                A2A.Error.to_jsonrpc(%A2A.Error{code: :task_in_progress, message: "x"})
 
-      assert %{"code" => -32004} =
+      assert %{"code" => -32_004} =
                A2A.Error.to_jsonrpc(%A2A.Error{code: :unsupported_operation, message: "x"})
     end
 
     test "unmapped or internal codes fall back to -32603" do
-      assert %{"code" => -32603} =
+      assert %{"code" => -32_603} =
                A2A.Error.to_jsonrpc(%A2A.Error{code: :internal_error, message: "x"})
 
-      assert %{"code" => -32603} =
+      assert %{"code" => -32_603} =
                A2A.Error.to_jsonrpc(%A2A.Error{code: :timeout, message: "x"})
 
-      assert %{"code" => -32603} =
+      assert %{"code" => -32_603} =
                A2A.Error.to_jsonrpc(%A2A.Error{code: :something_new, message: "x"})
     end
 

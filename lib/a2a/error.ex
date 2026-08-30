@@ -23,13 +23,13 @@ defmodule A2A.Error do
     }
 
   @codes %{
-    task_not_found: -32001,
-    task_not_continuable: -32002,
-    task_in_progress: -32002,
-    task_not_cancelable: -32002,
-    unsupported_operation: -32004,
-    content_type_not_supported: -32005,
-    invalid_agent_response: -32006
+    task_not_found: -32_001,
+    task_not_continuable: -32_002,
+    task_in_progress: -32_002,
+    task_not_cancelable: -32_002,
+    unsupported_operation: -32_004,
+    content_type_not_supported: -32_005,
+    invalid_agent_response: -32_006
   }
 
   @doc """
