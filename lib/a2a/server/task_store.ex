@@ -3,7 +3,8 @@ defmodule A2A.Server.TaskStore do
   Persistence behaviour for the durable task projection. The store is a *projection*,
   not the source of truth for a running task (that is the execution process). ETS is the default.
 
-  Phase 1 implements `save/2`, `get/2`, `delete/2`. `list/2` is optional and lands with the listing phase.
+  Phase 1 implements `save/2`, `get/2`, `delete/2`. `list/2` is optional; the ETS
+  store implements it as a scoped, filtered scan (see `A2A.Server.TaskStore.ETS`).
   """
   alias A2A.Types.Task
 
