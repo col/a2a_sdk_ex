@@ -26,7 +26,8 @@ defmodule A2A.Server.Supervisor do
       dyn_sup: Module.concat(name, "ExecutionSupervisor"),
       store: store,
       scope: Keyword.get(opts, :scope, A2A.Scope.default()),
-      id_generator: Keyword.get(opts, :id_generator, &A2A.Server.default_id/0)
+      id_generator: Keyword.get(opts, :id_generator, &A2A.Server.default_id/0),
+      drain_timeout: Keyword.get(opts, :drain_timeout, :infinity)
     }
 
     A2A.Server.put_handle(handle)
