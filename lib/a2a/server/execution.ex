@@ -54,8 +54,11 @@ defmodule A2A.Server.Execution do
     end
   end
 
+  def handle_info(_msg, state), do: {:noreply, state}
+
   # --- cancel lands in Task 6 as handle_call(:cancel, ...) ---
 
   defp format_down({%{__exception__: true} = e, _stack}), do: Exception.message(e)
-  defp format_down(other), do: inspect(other)
+  defp format_down({{:nocatch, value}, _stack}), do: "throw: #{inspect(value)}"
+  defp format_down(other), do: "exit: #{inspect(other)}"
 end

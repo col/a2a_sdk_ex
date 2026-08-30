@@ -122,6 +122,22 @@ defmodule A2A.Server.ExecutionTest do
   end
 
   @tag :capture_log
+  test "a throwing executor fails the task with a clean throw: message, not a raw stacktrace",
+       %{pubsub: pubsub} = m do
+    :ok = Events.subscribe(pubsub, "clean-throw")
+    {:ok, _} = Execution.start(m.dyn, m.registry, arg(A2A.Test.ThrowExecutor, "clean-throw", m))
+
+    assert_receive %Event{terminal?: true}, 1000
+
+    assert {:ok, %{status: %{state: :failed, message: %{parts: [%A2A.Types.Part{text: text}]}}}} =
+             TaskStore.ETS.get("clean-throw", A2A.Scope.default())
+
+    assert text == "throw: :boom"
+    refute text =~ "stacktrace"
+    refute text =~ ~r/lib\/a2a/
+  end
+
+  @tag :capture_log
   test "an executor exit transitions the task to failed", %{pubsub: pubsub} = m do
     :ok = Events.subscribe(pubsub, "exited")
     {:ok, _} = Execution.start(m.dyn, m.registry, arg(A2A.Test.ExitExecutor, "exited", m))
