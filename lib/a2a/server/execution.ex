@@ -10,7 +10,7 @@ defmodule A2A.Server.Execution do
   """
   use GenServer, restart: :temporary
   require Logger
-  alias A2A.Server.TaskUpdater
+  alias A2A.Server.{ResultAssembler, TaskUpdater}
 
   @spec start(atom(), atom(), map()) :: {:ok, pid()} | {:error, term()}
   def start(dyn_sup, _registry, arg) do
@@ -56,7 +56,46 @@ defmodule A2A.Server.Execution do
 
   def handle_info(_msg, state), do: {:noreply, state}
 
-  # --- cancel lands in Task 6 as handle_call(:cancel, ...) ---
+  @impl true
+  def handle_call(:cancel, _from, %{arg: arg, updater: updater, child: child} = state) do
+    if ResultAssembler.terminal?(updater.task) do
+      {:reply, {:error, A2A.Error.not_cancelable(arg.task_id)}, state}
+    else
+      # Stop the in-flight author work (unlinked child) before settling.
+      stop_child(child)
+
+      updater = maybe_author_cancel(arg, updater)
+
+      updater =
+        if ResultAssembler.terminal?(updater.task),
+          do: updater,
+          else: TaskUpdater.update_status(updater, :canceled)
+
+      {:stop, :normal, {:ok, updater.task}, %{state | updater: updater, child: nil}}
+    end
+  end
+
+  defp stop_child(nil), do: :ok
+
+  defp stop_child({pid, ref}) do
+    Process.demonitor(ref, [:flush])
+    if Process.alive?(pid), do: Process.exit(pid, :kill)
+    :ok
+  end
+
+  defp maybe_author_cancel(arg, updater) do
+    if function_exported?(arg.executor, :cancel, 2) do
+      arg.executor.cancel(arg.context, updater)
+      # The author emits via the updater's pubsub/store side effects; re-read the
+      # projection from the store so a terminal the author emitted is reflected.
+      case updater.store.get(arg.task_id, updater.scope) do
+        {:ok, task} -> %{updater | task: task}
+        _ -> updater
+      end
+    else
+      updater
+    end
+  end
 
   defp format_down({%{__exception__: true} = e, _stack}), do: Exception.message(e)
   defp format_down({{:nocatch, value}, _stack}), do: "throw: #{inspect(value)}"

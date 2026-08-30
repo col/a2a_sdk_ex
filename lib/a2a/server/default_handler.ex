@@ -10,10 +10,11 @@ defmodule A2A.Server.DefaultHandler do
   """
   @behaviour A2A.Server.RequestHandler
 
-  alias A2A.Server.{Events, EventStream, Execution, RequestContext, ResultAssembler}
+  alias A2A.Server.{Events, EventStream, Execution, RequestContext, ResultAssembler, TaskUpdater}
   alias A2A.Server.Events.Event
 
   alias A2A.Types.{
+    CancelTaskRequest,
     GetTaskRequest,
     ListTasksRequest,
     ListTasksResponse,
@@ -192,6 +193,50 @@ defmodule A2A.Server.DefaultHandler do
     case server.store.get(id, server.scope) do
       {:ok, task} -> {:ok, task}
       {:error, :not_found} -> {:error, A2A.Error.not_found(id)}
+    end
+  end
+
+  @impl true
+  @spec cancel_task(A2A.Server.t(), CancelTaskRequest.t()) ::
+          {:ok, Task.t()} | {:error, A2A.Error.t()}
+  def cancel_task(%A2A.Server{} = server, %CancelTaskRequest{id: id}) do
+    case Registry.lookup(server.registry, id) do
+      [{pid, _}] ->
+        try do
+          GenServer.call(pid, :cancel)
+        catch
+          # Process finished in the race window (completed before we called).
+          :exit, _ -> cancel_not_live(server, id)
+        end
+
+      [] ->
+        cancel_not_live(server, id)
+    end
+  end
+
+  # No live execution: terminal -> not_cancelable; non-terminal persisted -> settle
+  # :canceled in the store (+ broadcast) so a late resubscriber sees it; missing ->
+  # not_found.
+  defp cancel_not_live(server, id) do
+    case server.store.get(id, server.scope) do
+      {:ok, %Task{} = task} ->
+        if ResultAssembler.terminal?(task) do
+          {:error, A2A.Error.not_cancelable(id)}
+        else
+          updater =
+            TaskUpdater.new(id, task.context_id,
+              pubsub: server.pubsub,
+              store: server.store,
+              scope: server.scope,
+              task: task
+            )
+
+          updater = TaskUpdater.update_status(updater, :canceled)
+          {:ok, updater.task}
+        end
+
+      {:error, :not_found} ->
+        {:error, A2A.Error.not_found(id)}
     end
   end
 
