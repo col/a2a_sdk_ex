@@ -25,6 +25,15 @@ defmodule A2A.Test.EchoExecutor do
       )
 end
 
+defmodule A2A.Test.SilentExecutor do
+  @moduledoc "Emits nothing and blocks, to exercise the idle drain timeout."
+  @behaviour A2A.Server.AgentExecutor
+  @impl true
+  def execute(_ctx, _updater), do: Process.sleep(:infinity)
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+end
+
 defmodule A2A.Test.BoomExecutor do
   @moduledoc "Raises, to exercise crash → failed."
   @behaviour A2A.Server.AgentExecutor

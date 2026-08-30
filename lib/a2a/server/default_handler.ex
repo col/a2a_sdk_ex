@@ -2,63 +2,59 @@ defmodule A2A.Server.DefaultHandler do
   @moduledoc """
   Batteries-included `RequestHandler`. Phase 1: blocking `send_message/2` and `get_task/2`.
   It subscribes to the task topic *before* starting the execution process, then drains
-  the event stream through `ResultAssembler` to the terminal (or `input_required`) frame.
+  the shared `A2A.Server.EventStream` through `ResultAssembler` to the terminal (or
+  `input_required`) frame.
   """
   @behaviour A2A.Server.RequestHandler
 
-  alias A2A.Server.{Events, Execution, RequestContext, ResultAssembler}
+  alias A2A.Server.{Events, EventStream, Execution, RequestContext, ResultAssembler}
   alias A2A.Server.Events.Event
   alias A2A.Types.{GetTaskRequest, Message, SendMessageRequest, Task}
 
-  # Idle timeout, not a total task budget: `receive/after` in drain/1 re-arms on
-  # every event, so this only fires after 30s of *silence*. Phase 1 hardcodes it;
-  # a follow-on phase makes it configurable (server default + per-request via
-  # SendMessageConfiguration, incl. :infinity). Long-running work belongs in the
-  # deferred non-blocking/streaming modes, not a larger timeout here.
-  @drain_timeout 30_000
-
   @impl true
-  @spec send_message(A2A.Server.t(), SendMessageRequest.t()) ::
+  @spec send_message(A2A.Server.t(), SendMessageRequest.t(), keyword()) ::
           {:ok, Task.t()} | {:error, A2A.Error.t()}
-  def send_message(%A2A.Server{} = server, %SendMessageRequest{message: %Message{} = message} = req) do
+  def send_message(
+        %A2A.Server{} = server,
+        %SendMessageRequest{message: %Message{} = message} = req,
+        opts \\ []
+      ) do
     task_id = message.task_id || server.id_generator.()
     context_id = message.context_id || server.id_generator.()
+    timeout = Keyword.get(opts, :drain_timeout, server.drain_timeout)
 
     with :ok <- reject_terminal(server, task_id) do
-      ctx = %RequestContext{
-        message: message,
-        task_id: task_id,
-        context_id: context_id,
-        task: nil,
-        user: A2A.User.anonymous(),
-        config: req.configuration || %{}
-      }
-
+      ctx = build_context(message, task_id, context_id, req)
       :ok = Events.subscribe(server.pubsub, task_id)
 
-      arg = %{
-        task_id: task_id,
-        context_id: context_id,
-        executor: server.executor,
-        context: ctx,
-        updater_opts: [pubsub: server.pubsub, store: server.store, scope: server.scope],
-        registry: server.registry
-      }
-
-      case Execution.start(server.dyn_sup, server.registry, arg) do
-        {:ok, _pid} ->
-          result = drain(ResultAssembler.init(task_id, context_id))
-          :ok = Events.unsubscribe(server.pubsub, task_id)
-          result
+      case start_execution(server, task_id, context_id, ctx) do
+        {:ok, pid} ->
+          server
+          |> drain_stream(task_id, context_id, pid, timeout)
+          |> then(&resolve_blocking(server, task_id, &1))
 
         {:error, {:already_started, _}} ->
+          Events.unsubscribe(server.pubsub, task_id)
           {:error, %A2A.Error{code: :task_in_progress, message: "task already running"}}
 
         {:error, reason} ->
+          Events.unsubscribe(server.pubsub, task_id)
           {:error, %A2A.Error{code: :internal_error, message: inspect(reason)}}
       end
     end
   end
+
+  defp drain_stream(server, task_id, context_id, pid, timeout) do
+    server.pubsub
+    |> EventStream.stream(task_id, monitor: pid, idle_timeout: timeout, subscribe?: false)
+    |> Enum.reduce_while({:running, ResultAssembler.init(task_id, context_id)}, &fold_event/2)
+  end
+
+  defp fold_event(%Event{payload: payload, terminal?: true}, {_, acc}),
+    do: {:halt, {:done, ResultAssembler.apply(acc, payload)}}
+
+  defp fold_event(%Event{payload: payload}, {_, acc}),
+    do: {:cont, {:running, ResultAssembler.apply(acc, payload)}}
 
   @impl true
   @spec get_task(A2A.Server.t(), GetTaskRequest.t()) :: {:ok, Task.t()} | {:error, A2A.Error.t()}
@@ -81,18 +77,44 @@ defmodule A2A.Server.DefaultHandler do
     end
   end
 
-  # Blocking drain: works because send_message/2 runs in the caller's process,
-  # which subscribed to the task topic before the execution started, so PubSub
-  # delivers %Event{}s to this mailbox. This raw `receive` only serves blocking
-  # mode. The streaming/transport phase replaces it with a subscription-backed
-  # Stream (A2A.Server.EventStream): blocking becomes Enum.reduce_while over the
-  # stream, streaming pipes the same stream to the SSE encoder — one shared path.
-  defp drain(acc) do
-    receive do
-      %Event{payload: payload, terminal?: true} -> {:ok, ResultAssembler.apply(acc, payload)}
-      %Event{payload: payload} -> drain(ResultAssembler.apply(acc, payload))
-    after
-      @drain_timeout ->
+  defp build_context(message, task_id, context_id, req) do
+    %RequestContext{
+      message: message,
+      task_id: task_id,
+      context_id: context_id,
+      task: nil,
+      user: A2A.User.anonymous(),
+      config: req.configuration || %{}
+    }
+  end
+
+  defp start_execution(server, task_id, context_id, ctx) do
+    arg = %{
+      task_id: task_id,
+      context_id: context_id,
+      executor: server.executor,
+      context: ctx,
+      updater_opts: [pubsub: server.pubsub, store: server.store, scope: server.scope],
+      registry: server.registry
+    }
+
+    Execution.start(server.dyn_sup, server.registry, arg)
+  end
+
+  # Stream ended with a terminal frame → return the assembled task.
+  defp resolve_blocking(_server, _task_id, {:done, %Task{} = task}), do: {:ok, task}
+
+  # Stream ended without a terminal frame (execution :DOWN or idle timeout).
+  # A caught executor raise persists `failed`, so prefer the store's terminal task;
+  # otherwise this was a genuine timeout on a still-live task.
+  defp resolve_blocking(server, task_id, {:running, _partial}) do
+    case server.store.get(task_id, server.scope) do
+      {:ok, %Task{} = task} ->
+        if ResultAssembler.terminal?(task),
+          do: {:ok, task},
+          else: {:error, %A2A.Error{code: :timeout, message: "timed out draining task events"}}
+
+      {:error, :not_found} ->
         {:error, %A2A.Error{code: :timeout, message: "timed out draining task events"}}
     end
   end

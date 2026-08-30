@@ -6,7 +6,7 @@ defmodule A2A.Server.RequestHandler do
   """
   alias A2A.Types.{GetTaskRequest, Message, SendMessageRequest, Task}
 
-  @callback send_message(A2A.Server.t(), SendMessageRequest.t()) ::
+  @callback send_message(A2A.Server.t(), SendMessageRequest.t(), keyword()) ::
               {:ok, Task.t() | Message.t()} | {:error, A2A.Error.t()}
   @callback get_task(A2A.Server.t(), GetTaskRequest.t()) ::
               {:ok, Task.t()} | {:error, A2A.Error.t()}
