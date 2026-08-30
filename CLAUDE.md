@@ -30,8 +30,21 @@ event path, ETS `TaskStore`, and a blocking `DefaultHandler.send_message/get_tas
 Phase 2 adds streaming — `DefaultHandler.send_message_stream/2` and `resubscribe/2`,
 both served by the shared `A2A.Server.EventStream` (subscribe-and-yield with
 three-signal termination, see ADR-0009), plus a configurable, SDK-side
-`:drain_timeout` for the blocking path. HTTP transports, cancellation, and push
-notifications are follow-on phases.
+`:drain_timeout` for the blocking path.
+
+The **HTTP transport** has landed (JSON-RPC binding, ADR-0010): `A2A.Plug.Router`
+(mountable `Plug.Router`) + `A2A.Plug.JSONRPC` (envelope decode/dispatch) +
+`A2A.Plug.SSE` (streaming responses), plus an optional `A2A.Standalone`
+(Bandit-backed) for running without a host web framework. Four methods are
+wired — `message/send`, `message/stream`, `tasks/get`, `tasks/resubscribe` —
+rendered via `A2A.Error.to_jsonrpc/1`. `plug` is now a **hard** runtime dep;
+`bandit` is optional (only needed for `A2A.Standalone`). `tasks/cancel`,
+`tasks/list`, and the REST (HTTP+JSON) binding remain deferred.
+
+`examples/echo_server/` is a minimal runnable agent demonstrating the HTTP
+transport end-to-end. It has its **own `mix.exs`** (path-deps on this repo) and
+runs standalone via `mix run --no-halt` from that directory — it is **not**
+part of this repo's `mix test` or `mix precommit`.
 
 ### Known constraints / gotchas (server runtime)
 
@@ -105,7 +118,9 @@ them casually.
   spelling follows the proto (US `:canceled` → `"TASK_STATE_CANCELED"`).
 - **TDD.** Write the failing test first; the everyday `mix test` must stay green
   with no proto toolchain.
-- Keep the runtime dependency graph minimal (`jason` only for now).
+- Runtime dependency graph: `jason`, `phoenix_pubsub`, `plug` (+ optional
+  `bandit` for `A2A.Standalone`). The typed foundation alone (`A2A.Types.*` +
+  `A2A.JSON`) still depends on `jason` only.
 
 ## Documentation policy
 
