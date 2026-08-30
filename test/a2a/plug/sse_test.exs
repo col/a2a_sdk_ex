@@ -3,10 +3,21 @@ defmodule A2A.Plug.SSETest do
   import Plug.Test
   import Plug.Conn
 
+  alias A2A.JSON
   alias A2A.Plug.Router
+  alias A2A.Plug.SSE
   alias A2A.Server.TaskStore
   alias A2A.Test.EchoExecutor
-  alias A2A.Types.{Message, Part, SendMessageRequest, SubscribeToTaskRequest}
+
+  alias A2A.Types.{
+    Message,
+    Part,
+    SendMessageRequest,
+    StreamResponse,
+    SubscribeToTaskRequest,
+    Task,
+    TaskStatus
+  }
 
   setup do
     name = :"srv_sse_#{System.unique_integer([:positive])}"
@@ -80,16 +91,16 @@ defmodule A2A.Plug.SSETest do
 
   test "respond/4 uses a custom frame formatter (bare frame, no envelope)" do
     frame =
-      A2A.Types.StreamResponse.task(%A2A.Types.Task{
+      StreamResponse.task(%Task{
         id: "t",
-        status: %A2A.Types.TaskStatus{state: :working}
+        status: %TaskStatus{state: :working}
       })
 
-    formatter = fn _id, f -> Jason.encode_to_iodata!(A2A.JSON.to_json_map(f)) end
+    formatter = fn _id, f -> Jason.encode_to_iodata!(JSON.to_json_map(f)) end
 
     conn =
       Plug.Test.conn(:get, "/")
-      |> A2A.Plug.SSE.respond(nil, [frame], formatter)
+      |> SSE.respond(nil, [frame], formatter)
 
     # Body is an SSE data frame carrying the BARE StreamResponse (no "jsonrpc"/"id").
     refute conn.resp_body =~ "jsonrpc"
