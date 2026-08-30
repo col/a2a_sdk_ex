@@ -21,4 +21,25 @@ defmodule A2A.Error do
       message: "task is in a terminal state and cannot be continued: #{task_id}",
       data: %{task_id: task_id}
     }
+
+  @codes %{
+    task_not_found: -32001,
+    task_not_continuable: -32002,
+    task_in_progress: -32002,
+    task_not_cancelable: -32002,
+    unsupported_operation: -32004,
+    content_type_not_supported: -32005,
+    invalid_agent_response: -32006
+  }
+
+  @doc """
+  Renders this semantic error as a JSON-RPC 2.0 error object
+  (`%{"code" => integer, "message" => binary, optional "data" => term}`).
+  Unmapped or internal codes fall back to `-32603` (internal error).
+  """
+  @spec to_jsonrpc(t()) :: %{required(String.t()) => term()}
+  def to_jsonrpc(%__MODULE__{code: code, message: message, data: data}) do
+    base = %{"code" => Map.get(@codes, code, -32_603), "message" => message}
+    if is_nil(data), do: base, else: Map.put(base, "data", data)
+  end
 end
