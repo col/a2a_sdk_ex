@@ -2,7 +2,7 @@ defmodule EchoServer.Application do
   @moduledoc false
   use Application
 
-  @port 4000
+  @port 5001
 
   @impl true
   def start(_type, _args) do
