@@ -118,4 +118,58 @@ defmodule A2A.Server.ListTasksTest do
     assert {:error, %A2A.Error{}} =
              DefaultHandler.list_tasks(server, %ListTasksRequest{page_token: "!!!not-base64!!!"})
   end
+
+  test "equal timestamps order by id ascending", %{server: server} do
+    ts = ~U[2026-01-01 00:00:00Z]
+    put(server, "c", ts)
+    put(server, "a", ts)
+    put(server, "b", ts)
+
+    {:ok, %ListTasksResponse{tasks: tasks}} =
+      DefaultHandler.list_tasks(server, %ListTasksRequest{})
+
+    assert Enum.map(tasks, & &1.id) == ["a", "b", "c"]
+  end
+
+  test "cursor split mid-tie yields no duplicates and no gaps", %{server: server} do
+    ts = ~U[2026-01-01 00:00:00Z]
+    for id <- ["c", "a", "b", "e", "d"], do: put(server, id, ts)
+
+    {:ok, page1} = DefaultHandler.list_tasks(server, %ListTasksRequest{page_size: 2})
+    assert Enum.map(page1.tasks, & &1.id) == ["a", "b"]
+    assert page1.next_page_token != ""
+
+    {:ok, page2} =
+      DefaultHandler.list_tasks(server, %ListTasksRequest{
+        page_size: 2,
+        page_token: page1.next_page_token
+      })
+
+    assert Enum.map(page2.tasks, & &1.id) == ["c", "d"]
+
+    {:ok, page3} =
+      DefaultHandler.list_tasks(server, %ListTasksRequest{
+        page_size: 2,
+        page_token: page2.next_page_token
+      })
+
+    assert Enum.map(page3.tasks, & &1.id) == ["e"]
+    assert page3.next_page_token == ""
+
+    ids = Enum.flat_map([page1, page2, page3], fn p -> Enum.map(p.tasks, & &1.id) end)
+    assert Enum.sort(ids) == ["a", "b", "c", "d", "e"]
+    assert length(Enum.uniq(ids)) == 5
+  end
+
+  test "negative history_length behaves like unbounded (no crash)", %{server: server} do
+    msgs =
+      for n <- 1..3, do: %Message{message_id: "m#{n}", role: :agent, parts: [Part.text("#{n}")]}
+
+    put(server, "a", ~U[2026-01-01 00:00:01Z], history: msgs)
+
+    {:ok, %{tasks: [t]}} =
+      DefaultHandler.list_tasks(server, %ListTasksRequest{history_length: -1})
+
+    assert Enum.map(t.history, & &1.message_id) == ["m1", "m2", "m3"]
+  end
 end

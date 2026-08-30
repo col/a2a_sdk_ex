@@ -342,8 +342,9 @@ defmodule A2A.Server.DefaultHandler do
   end
 
   defp truncate_history(task, nil), do: task
+  defp truncate_history(task, n) when n < 0, do: task
 
-  defp truncate_history(task, n) when n >= 0,
+  defp truncate_history(task, n),
     do: %{task | history: Enum.take(task.history, -n)}
 
   defp maybe_drop_artifacts(task, true), do: task
