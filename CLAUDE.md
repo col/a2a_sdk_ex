@@ -24,10 +24,36 @@ against future proto releases. The typed foundation itself still covers only
 data-model shapes and codec — no transport, process, or socket behaviour — but
 see the server runtime paragraph below.
 
-The **server runtime** (`A2A.Server.*`) is now underway — Phase 1 delivers the OTP
+The **server runtime** (`A2A.Server.*`) is now underway. Phase 1 delivered the OTP
 walking skeleton (mountable supervision tree, process-per-task execution, PubSub
 event path, ETS `TaskStore`, and a blocking `DefaultHandler.send_message/get_task`).
-HTTP transports, streaming, cancellation, and push notifications are follow-on phases.
+Phase 2 adds streaming — `DefaultHandler.send_message_stream/2` and `resubscribe/2`,
+both served by the shared `A2A.Server.EventStream` (subscribe-and-yield with
+three-signal termination, see ADR-0009), plus a configurable, SDK-side
+`:drain_timeout` for the blocking path. HTTP transports, cancellation, and push
+notifications are follow-on phases.
+
+### Known constraints / gotchas (server runtime)
+
+- **`A2A.Server.TaskStore.ETS` is globally named** (`name: __MODULE__`), so **two
+  `A2A.Server.Supervisor` trees cannot run at once** — the second collides with
+  `{:already_started}`. This partially bends invariant 7 ("nothing global"); it's
+  a Phase-1 limitation left in place. **In tests**, don't `start_supervised!` a
+  second tree to vary behaviour — reuse the setup server and override the field
+  (`server = %{server | executor: MyExecutor}`); `DefaultHandler` reads
+  `server.executor` at execution-start. A proper fix (per-instance ETS table +
+  GenServer name) is a candidate before multi-tenant or the transports phase spins
+  up concurrent servers.
+- **Streaming enumerables must be enumerated once, in the calling process.**
+  `send_message_stream/2` and `resubscribe/2` subscribe eagerly (in the caller)
+  then return a lazy stream whose `receive` runs at enumeration time — enumerate
+  it elsewhere and PubSub events land in the wrong mailbox; never enumerate it and
+  the subscription leaks until the process dies. (Documented on both functions.)
+- **Deferred (known-minor):** blocking `resolve_blocking` returns error code
+  `:timeout` for *any* terminal-less end, including an executor that exits
+  (`:DOWN`) without emitting a terminal. Distinguishing idle-timeout from `:DOWN`
+  needs `EventStream` to surface a halt reason (a small contract change) — the
+  result is correct, only the code/message is imprecise on a pathological path.
 
 ## Common commands
 

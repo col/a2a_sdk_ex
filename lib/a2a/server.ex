@@ -1,6 +1,8 @@
 defmodule A2A.Server do
   @moduledoc "The resolved runtime handle for a mounted A2A server. Built by `A2A.Server.Supervisor`."
 
+  @type timeout_opt :: non_neg_integer() | :infinity
+
   @type t :: %__MODULE__{
           name: atom(),
           executor: module(),
@@ -9,9 +11,20 @@ defmodule A2A.Server do
           dyn_sup: atom(),
           store: module(),
           scope: A2A.Scope.t(),
-          id_generator: (-> String.t())
+          id_generator: (-> String.t()),
+          drain_timeout: timeout_opt()
         }
-  defstruct [:name, :executor, :pubsub, :registry, :dyn_sup, :store, :scope, :id_generator]
+  defstruct [
+    :name,
+    :executor,
+    :pubsub,
+    :registry,
+    :dyn_sup,
+    :store,
+    :scope,
+    :id_generator,
+    drain_timeout: :infinity
+  ]
 
   @spec handle(atom()) :: t()
   def handle(name), do: :persistent_term.get({__MODULE__, name})

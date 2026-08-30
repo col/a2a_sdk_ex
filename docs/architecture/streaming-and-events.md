@@ -40,15 +40,26 @@ subscribes. This single mechanism serves all three delivery paths:
 
 `message/stream` opens an SSE response that subscribes to the topic and streams
 each event as it is published (see [Transports](transports.md#sse-streaming-a2aplugsse)
-for the header-peek and chunking details).
+for the header-peek and chunking details). At the `DefaultHandler` level, before
+any transport exists, `send_message_stream/2` returns this directly as an
+`Enumerable.t()` of `%A2A.Types.StreamResponse{}` frames.
 
-Termination rules (ported explicitly from the reference SDKs):
+Both live streaming and resubscribe are served by the **same** consumption
+primitive, `A2A.Server.EventStream` — a `Stream.resource/3` that subscribes to
+the task topic and yields envelopes until it halts. Stream termination is the
+union of three signals, not just a terminal event:
 
-- Stop on a **terminal** state (`completed`/`failed`/`canceled`/`rejected`).
-- Stop on **`input_required`**.
-- **Do not** stop on **`auth_required`** — the executor may resume after
-  out-of-band credential injection. This asymmetry is intentional and matches
-  the JS SDK.
+1. a **terminal** event (`completed`/`failed`/`canceled`/`rejected`, or
+   `input_required`);
+2. the execution process going **`:DOWN`** (deterministic crash/exit handling);
+3. an **idle timeout** (defense-in-depth against a silent hang; `:infinity` by
+   default for streaming).
+
+**Do not** stop on **`auth_required`** — the executor may resume after
+out-of-band credential injection. This asymmetry is intentional and matches the
+JS SDK. See [ADR-0009](decisions/0009-eventstream-termination.md) for the full
+rationale (why three signals, why `:infinity` is safe, why blocking and
+streaming can share one implementation).
 
 ## Resubscription
 
@@ -59,9 +70,15 @@ its stream — or a *different* client entirely — can attach and receive
 subsequent events. The reference SDKs need a `taskId → bus` manager map to make
 this possible; here the `Registry` + PubSub topic provide it directly.
 
-Events emitted *before* a resubscription are read from the `TaskStore`
-projection ([Persistence](persistence.md)); events after it arrive live over the
-topic.
+`resubscribe/2` also consumes `A2A.Server.EventStream` (with `subscribe?: false`,
+since it owns the subscription itself to interleave it with a store read —
+subscribe first, then read the snapshot, so an event landing in the gap is seen
+live rather than missed). Catch-up for everything emitted *before* the
+resubscription is a **single folded-snapshot `task` frame** read from the
+`TaskStore` projection ([Persistence](persistence.md)) — not a replay of
+individual past events, because the store is a projection, not an event log.
+Events after the snapshot arrive live over the topic, subject to the same
+three-signal termination as live streaming.
 
 ## Push notifications (webhooks)
 
