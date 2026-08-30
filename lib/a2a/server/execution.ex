@@ -1,11 +1,12 @@
 defmodule A2A.Server.Execution do
   @moduledoc """
-  The single process for a `task_id`. Runs the author's `execute/2` under a serial
-  mailbox — the only writer of the task's live state — broadcasting and persisting
-  each emitted event via the `TaskUpdater`. Temporary: an execution has no resume
-  logic, so it must never be restarted — restarting would re-run `execute/2` and
-  re-emit/re-persist duplicate events. Both normal completion and abnormal exit
-  (raise, throw, exit) settle with `{:stop, :normal, state}` after failing the task.
+  The single process for a `task_id`. Runs the author's `execute/2` in an
+  **unlinked, monitored child process**, keeping this GenServer's mailbox free to
+  handle a `:cancel` call while the author's work is in flight. The GenServer is
+  the task's serial state owner; it stays alive until the child finishes, then
+  stops `:normal`. `restart: :temporary` — a completed/failed execution must
+  never re-run. An author raise/throw/exit surfaces as a non-normal child
+  `:DOWN`, which fails the task once and then stops normally.
   """
   use GenServer, restart: :temporary
   require Logger
@@ -29,23 +30,32 @@ defmodule A2A.Server.Execution do
         Keyword.put_new(arg.updater_opts, :scope, A2A.Scope.default())
       )
 
-    {:ok, %{arg: arg, updater: updater}, {:continue, :run}}
+    {:ok, %{arg: arg, updater: updater, child: nil}, {:continue, :run}}
   end
 
   @impl true
-  def handle_continue(:run, %{arg: arg, updater: updater} = state) do
-    arg.executor.execute(arg.context, updater)
-    {:stop, :normal, state}
-  rescue
-    e ->
-      Logger.error("A2A execution #{arg.task_id} crashed: #{Exception.message(e)}")
-      TaskUpdater.fail(updater, Exception.message(e))
-      {:stop, :normal, state}
-  catch
-    kind, reason ->
-      message = "#{kind}: #{inspect(reason)}"
-      Logger.error("A2A execution #{arg.task_id} crashed: #{message}")
-      TaskUpdater.fail(updater, message)
-      {:stop, :normal, state}
+  def handle_continue(:run, %{arg: arg} = state) do
+    {pid, ref} = spawn_monitor(fn -> arg.executor.execute(arg.context, state.updater) end)
+    {:noreply, %{state | child: {pid, ref}}}
   end
+
+  # Child finished — normal end stops us normally; abnormal end fails the task first.
+  @impl true
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %{child: {_, ref}} = state) do
+    case reason do
+      :normal ->
+        {:stop, :normal, state}
+
+      other ->
+        message = format_down(other)
+        Logger.error("A2A execution #{state.arg.task_id} crashed: #{message}")
+        TaskUpdater.fail(state.updater, message)
+        {:stop, :normal, state}
+    end
+  end
+
+  # --- cancel lands in Task 6 as handle_call(:cancel, ...) ---
+
+  defp format_down({%{__exception__: true} = e, _stack}), do: Exception.message(e)
+  defp format_down(other), do: inspect(other)
 end

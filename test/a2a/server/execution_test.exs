@@ -54,6 +54,26 @@ defmodule A2A.Server.ExecutionTest do
     assert {:ok, %{status: %{state: :completed}}} = TaskStore.ETS.get("t-1", A2A.Scope.default())
   end
 
+  test "the Execution process survives until the child completes", %{pubsub: pubsub} = m do
+    :ok = Events.subscribe(pubsub, "slow")
+
+    {:ok, pid} =
+      Execution.start(m.dyn, m.registry, arg(A2A.Server.ExecutionTest.SlowExecutor, "slow", m))
+
+    ref = Process.monitor(pid)
+
+    # The executor sleeps 200ms before completing; the Execution GenServer
+    # must still be alive partway through that sleep (mailbox free, but the
+    # process itself not yet stopped).
+    Process.sleep(50)
+    assert Process.alive?(pid)
+    refute_received {:DOWN, ^ref, :process, ^pid, _reason}
+
+    assert_receive %Event{terminal?: true}, 1000
+    assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 1000
+    assert {:ok, %{status: %{state: :completed}}} = TaskStore.ETS.get("slow", A2A.Scope.default())
+  end
+
   test "a second start for the same task_id is rejected", %{} = m do
     {:ok, _} =
       Execution.start(m.dyn, m.registry, arg(A2A.Server.ExecutionTest.SlowExecutor, "dup", m))
