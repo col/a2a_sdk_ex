@@ -1,14 +1,17 @@
 defmodule A2A.Plug.Router do
   @moduledoc """
-  Mountable A2A HTTP transport (JSON-RPC binding). Mount into any Plug/Phoenix
-  pipeline:
+  Mountable A2A HTTP transport — both bindings, JSON-RPC and REST. Mount into
+  any Plug/Phoenix pipeline:
 
       forward "/a2a", to: A2A.Plug.Router, init_opts: [server: MyAgent]
 
-  Routes: `GET /.well-known/agent-card.json` (serves the configured `AgentCard`)
-  and `POST /` (JSON-RPC 2.0; streaming methods respond as Server-Sent Events).
-  All protocol semantics live behind `A2A.Server.RequestHandler`; this router
-  only parses/renders the wire form.
+  Routes: `GET /.well-known/agent-card.json` (serves the configured `AgentCard`);
+  `POST /` (JSON-RPC 2.0; streaming methods respond as Server-Sent Events); and
+  the REST routes (`A2A.Plug.REST`) — `POST /message:send`,
+  `POST /message:stream` (SSE), `GET /tasks`, `GET /tasks/:id`,
+  `GET /tasks/:id:subscribe` (SSE), `POST /tasks/:id:cancel` — following the
+  vendored proto's `google.api.http` paths. All protocol semantics live behind
+  `A2A.Server.RequestHandler`; this router only parses/renders the wire form.
   """
   use Plug.Router, copy_opts_to_assign: :init_opts
 

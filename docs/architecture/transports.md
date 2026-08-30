@@ -10,17 +10,21 @@ into any Plug or Phoenix pipeline; a thin `A2A.Standalone` boots Bandit for
 users with no web framework. gRPC is deferred but the handler boundary is
 designed so it can be added as a third adapter without touching agent code.
 
-**Status:** the JSON-RPC binding has **landed** — `A2A.Plug.Router` (mountable
-`Plug.Router`), `A2A.Plug.JSONRPC` (envelope decode/dispatch), `A2A.Plug.SSE`
-(streaming), the agent-card route, and optional `A2A.Standalone` (Bandit). The
-four wired methods are `message/send`, `message/stream`, `tasks/get`, and
-`tasks/resubscribe` — `tasks/cancel`, `tasks/list`, and the REST/HTTP+JSON
-binding are still pending (see [ADR-0010](decisions/0010-jsonrpc-transport-first.md)).
+**Status:** both bindings have **landed** — `A2A.Plug.Router` (mountable
+`Plug.Router`), `A2A.Plug.JSONRPC` (envelope decode/dispatch), `A2A.Plug.REST`
+(REST transport mechanics), `A2A.Plug.SSE` (streaming, reused by both
+bindings), the agent-card route, and optional `A2A.Standalone` (Bandit).
+JSON-RPC serves `message/send`, `message/stream`, `tasks/get`,
+`tasks/cancel`, `tasks/list`, and `tasks/resubscribe`; REST serves the same
+six operations over resource-style routes. Push-notification-config routes
+and `/{tenant}/…` scoping remain deferred (see
+[ADR-0011](decisions/0011-rest-binding-and-cancel-list.md)).
 
 Rationale: [ADR-0003](decisions/0003-jsonrpc-and-rest-transports.md) (transports),
-[ADR-0006](decisions/0006-plug-first-mounting.md) (plug-first mounting), and
+[ADR-0006](decisions/0006-plug-first-mounting.md) (plug-first mounting),
 [ADR-0010](decisions/0010-jsonrpc-transport-first.md) (JSON-RPC ships first;
-REST follows).
+REST follows), and [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md)
+(REST binding + `cancel`/`list` land).
 
 ## One handler, N transports
 
@@ -57,9 +61,16 @@ Routes exposed today:
 | Method & path | Purpose | Doc |
 | --- | --- | --- |
 | `GET /.well-known/agent-card.json` | Serve the `AgentCard` | [Data model](data-model.md) |
-| `POST /` | JSON-RPC endpoint (`message/send`, `message/stream`, `tasks/get`, `tasks/resubscribe`; streaming methods respond as SSE) | below |
+| `POST /` | JSON-RPC endpoint (`message/send`, `message/stream`, `tasks/get`, `tasks/cancel`, `tasks/list`, `tasks/resubscribe`; streaming methods respond as SSE) | below |
+| `POST /message:send` | REST: `message/send` (`application/a2a+json`) | below |
+| `POST /message:stream` | REST: `message/stream` (SSE) | below |
+| `GET /tasks/:id` | REST: `tasks/get` (`application/a2a+json`) | below |
+| `GET /tasks` | REST: `tasks/list` (`application/a2a+json`) | below |
+| `POST /tasks/:id:cancel` | REST: `tasks/cancel` (`application/a2a+json`) | below |
+| `GET /tasks/:id:subscribe` | REST: `tasks/resubscribe` (SSE) | below |
 
-REST resource routes (`/v1/…`) are **not yet implemented** — see below.
+Routes follow the vendored proto's `google.api.http` annotations exactly — no
+invented `/v1` prefix.
 
 ### Dependencies
 
@@ -75,10 +86,9 @@ split that keeps server deps out of the graph for consumers who don't need them.
 - Single `POST /` endpoint (`A2A.Plug.Router`); `A2A.Plug.JSONRPC` decodes the
   envelope, dispatches by JSON-RPC `method` name to the corresponding
   `A2A.Server.DefaultHandler` callback, and re-encodes the result.
-- Four methods are wired: `message/send`, `message/stream` (unary vs. stream),
-  `tasks/get`, `tasks/resubscribe`. `tasks/cancel` and `tasks/list` are
-  declared on the `RequestHandler` behaviour but not yet dispatched here — an
-  unknown method renders `-32601`.
+- Six methods are wired: `message/send`, `message/stream` (unary vs. stream),
+  `tasks/get`, `tasks/cancel`, `tasks/list`, `tasks/resubscribe`. An unknown
+  method renders `-32601`.
 - Requests/responses use the JSON-RPC 2.0 envelope; envelope-level errors
   (parse error `-32700`, invalid request `-32600`, method not found `-32601`,
   invalid params `-32602`) and semantic errors render via
@@ -87,16 +97,34 @@ split that keeps server deps out of the graph for consumers who don't need them.
 - Streaming methods (`message/stream`, `tasks/resubscribe`) respond as
   **Server-Sent Events** via `A2A.Plug.SSE`.
 
-## REST (HTTP+JSON) binding — **pending**
+## REST (HTTP+JSON) binding — **landed**
 
-Deferred to a follow-on phase per [ADR-0010](decisions/0010-jsonrpc-transport-first.md);
-not yet implemented. The intended shape:
+Landed per [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md) —
+`A2A.Plug.REST` is the transport-mechanics twin of `A2A.Plug.JSONRPC`: build a
+typed request from path params + query + body via `A2A.JSON`, call
+`A2A.Server.DefaultHandler`, and tag the result for `A2A.Plug.Router` to
+render.
 
-- Resource-style routes; proto3-JSON request/response bodies via `A2A.JSON`.
-- Content type `application/a2a+json`.
-- Errors render via `A2A.Error.to_rest/1` (HTTP status + body) — `to_rest/1`
-  does not exist yet.
-- The same streaming methods would use SSE, identically to JSON-RPC.
+- Resource-style routes (see the table above), proto3-JSON request/response
+  bodies via `A2A.JSON`. Routes follow the vendored proto's
+  `google.api.http` annotations exactly — no invented `/v1` prefix.
+- Success responses use content type `application/a2a+json`.
+- Errors render via `A2A.Error.to_rest/1` — `{http_status, body}` where `body`
+  is `google.rpc.Status` ProtoJSON (a `code` int, `message`, and a `details`
+  array with one `google.rpc.ErrorInfo`). See
+  [Cross-cutting concerns](cross-cutting.md#errors) for the full status table.
+- Streaming routes (`message:stream`, `tasks/:id:subscribe`) use the same
+  `A2A.Plug.SSE` core as JSON-RPC, via `SSE.respond/4`'s frame-formatter
+  argument — REST passes a formatter that emits the bare `StreamResponse`
+  ProtoJSON with no JSON-RPC envelope.
+- One wire nuance: Plug's router treats a mid-segment `:` as a dynamic-param
+  marker, so the proto's literal `:send`/`:stream` suffixes are written
+  escaped in the router (`post "/message\:send"`), and `:cancel`/`:subscribe`
+  are recovered by matching the `:id` segment and stripping the known suffix.
+- **Deferred:** push-notification-config routes
+  (`/tasks/{id}/pushNotificationConfigs…` — the runtime implements no push
+  config yet) and `/{tenant}/…` additional bindings (scoping is still a
+  single `A2A.Scope`; non-tenant routes only for now).
 
 ## SSE streaming (`A2A.Plug.SSE`) — **landed**
 
@@ -107,10 +135,14 @@ Streaming is where the OTP model pays off. The SSE handler:
    directly from the reference SDKs so that an *early* error surfaces as a proper
    JSON-RPC/HTTP error envelope rather than a `200` SSE stream that then fails.
 3. Streams subsequent events with `Plug.Conn.chunk/2`, formatting each as an SSE
-   `data:` frame. Each frame is a **full JSON-RPC response envelope**
-   (`{"jsonrpc": "2.0", "id": ..., "result": ...}`) carrying one `StreamResponse`
-   as `result` — not a bare `StreamResponse` — built by
-   `A2A.Plug.JSONRPC.stream_frame/2`.
+   `data:` frame via a pluggable formatter (`SSE.respond/4`). JSON-RPC's
+   formatter (the default, `A2A.Plug.JSONRPC.stream_frame/2`) wraps each frame
+   in a **full JSON-RPC response envelope**
+   (`{"jsonrpc": "2.0", "id": ..., "result": ...}`) carrying one
+   `StreamResponse` as `result`; REST's formatter (`A2A.Plug.REST.frame/2`)
+   emits the bare `StreamResponse` ProtoJSON with no envelope. The
+   subscribe/peek/chunk mechanics are shared — only the frame formatter
+   differs.
 4. Ends when a terminal (or `input_required`) event arrives. A client
    disconnect simply unsubscribes; because the execution process is independent
    of the consumer, the task keeps running and can be re-attached via
@@ -141,4 +173,6 @@ generated protobuf-binary wire layer sitting behind the public
 - [Request handling](request-handling.md) — the handler these transports call.
 - [Streaming and events](streaming-and-events.md) — what flows over SSE.
 - [ADR-0003](decisions/0003-jsonrpc-and-rest-transports.md),
-  [ADR-0006](decisions/0006-plug-first-mounting.md).
+  [ADR-0006](decisions/0006-plug-first-mounting.md),
+  [ADR-0010](decisions/0010-jsonrpc-transport-first.md),
+  [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md).

@@ -1,8 +1,13 @@
 defmodule A2A.Server.RequestHandler do
   @moduledoc """
-  The transport-agnostic RPC surface. Both the (later) JSON-RPC and REST plugs will
-  call one implementation. Phase 1 implements `send_message/2` (blocking) and `get_task/2`;
-  the streaming, cancel, and listing callbacks are declared but optional.
+  The transport-agnostic RPC surface. Both the JSON-RPC and REST plugs call one
+  implementation (`A2A.Server.DefaultHandler`), which implements every callback
+  below — `send_message/2` (blocking), `get_task/2`, `send_message_stream/2`,
+  `resubscribe/2`, `cancel_task/2`, and `list_tasks/2`. The push-notification-
+  config callbacks remain unimplemented, so streaming/cancel/list are declared
+  as `@optional_callbacks` for the benefit of alternate `RequestHandler`
+  implementations that don't need them, not because the batteries-included
+  handler skips them.
   """
   alias A2A.Types.{
     CancelTaskRequest,
