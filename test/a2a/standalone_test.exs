@@ -58,4 +58,36 @@ defmodule A2A.StandaloneTest do
     assert %{"result" => %{"task" => %{"status" => %{"state" => "TASK_STATE_COMPLETED"}}}} =
              Jason.decode!(to_string(body))
   end
+
+  describe "child_spec/1 Bandit option passthrough" do
+    # The Bandit options are the single argument in the built child spec's
+    # `start` MFA — inspect them without booting a socket.
+    defp bandit_opts(a2a_opts) do
+      %{start: {Bandit, :start_link, [opts]}} = A2A.Standalone.child_spec(a2a_opts)
+      opts
+    end
+
+    test "forwards :bandit options to Bandit and always sets our plug" do
+      opts = bandit_opts(server: MyAgent, bandit: [scheme: :https, ip: {127, 0, 0, 1}])
+
+      assert opts[:scheme] == :https
+      assert opts[:ip] == {127, 0, 0, 1}
+      assert opts[:plug] == {A2A.Plug.Router, [server: MyAgent]}
+    end
+
+    test "top-level :port seeds the port; defaults to 4000" do
+      assert bandit_opts(server: MyAgent)[:port] == 4000
+      assert bandit_opts(server: MyAgent, port: 4001)[:port] == 4001
+    end
+
+    test "a :port inside :bandit overrides the top-level :port convenience" do
+      opts = bandit_opts(server: MyAgent, port: 4001, bandit: [port: 4443])
+      assert opts[:port] == 4443
+    end
+
+    test "the caller cannot override the A2A plug via :bandit" do
+      opts = bandit_opts(server: MyAgent, bandit: [plug: SomeOther.Plug])
+      assert opts[:plug] == {A2A.Plug.Router, [server: MyAgent]}
+    end
+  end
 end
