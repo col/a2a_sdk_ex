@@ -9,7 +9,16 @@ defmodule A2A.Server.DefaultHandler do
 
   alias A2A.Server.{Events, EventStream, Execution, RequestContext, ResultAssembler}
   alias A2A.Server.Events.Event
-  alias A2A.Types.{GetTaskRequest, Message, SendMessageRequest, Task}
+
+  alias A2A.Types.{
+    GetTaskRequest,
+    Message,
+    SendMessageRequest,
+    StreamResponse,
+    Task,
+    TaskArtifactUpdateEvent,
+    TaskStatusUpdateEvent
+  }
 
   @impl true
   @spec send_message(A2A.Server.t(), SendMessageRequest.t(), keyword()) ::
@@ -55,6 +64,42 @@ defmodule A2A.Server.DefaultHandler do
 
   defp fold_event(%Event{payload: payload}, {_, acc}),
     do: {:cont, {:running, ResultAssembler.apply(acc, payload)}}
+
+  @impl true
+  @spec send_message_stream(A2A.Server.t(), SendMessageRequest.t()) ::
+          Enumerable.t() | {:error, A2A.Error.t()}
+  def send_message_stream(
+        %A2A.Server{} = server,
+        %SendMessageRequest{message: %Message{} = message} = req
+      ) do
+    task_id = message.task_id || server.id_generator.()
+    context_id = message.context_id || server.id_generator.()
+
+    with :ok <- reject_terminal(server, task_id) do
+      ctx = build_context(message, task_id, context_id, req)
+      :ok = Events.subscribe(server.pubsub, task_id)
+
+      case start_execution(server, task_id, context_id, ctx) do
+        {:ok, pid} ->
+          server.pubsub
+          |> EventStream.stream(task_id, monitor: pid, idle_timeout: :infinity, subscribe?: false)
+          |> Stream.map(&to_frame(&1.payload))
+
+        {:error, {:already_started, _}} ->
+          Events.unsubscribe(server.pubsub, task_id)
+          {:error, %A2A.Error{code: :task_in_progress, message: "task already running"}}
+
+        {:error, reason} ->
+          Events.unsubscribe(server.pubsub, task_id)
+          {:error, %A2A.Error{code: :internal_error, message: inspect(reason)}}
+      end
+    end
+  end
+
+  defp to_frame(%Task{} = t), do: StreamResponse.task(t)
+  defp to_frame(%Message{} = m), do: StreamResponse.message(m)
+  defp to_frame(%TaskStatusUpdateEvent{} = e), do: StreamResponse.status_update(e)
+  defp to_frame(%TaskArtifactUpdateEvent{} = e), do: StreamResponse.artifact_update(e)
 
   @impl true
   @spec get_task(A2A.Server.t(), GetTaskRequest.t()) :: {:ok, Task.t()} | {:error, A2A.Error.t()}

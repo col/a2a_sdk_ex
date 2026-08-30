@@ -34,6 +34,25 @@ defmodule A2A.Test.SilentExecutor do
   def cancel(_ctx, _updater), do: :ok
 end
 
+defmodule A2A.Test.AuthThenInputExecutor do
+  @moduledoc "Emits auth_required (non-terminal) then input_required (stops the stream)."
+  @behaviour A2A.Server.AgentExecutor
+  alias A2A.Server.TaskUpdater
+
+  @impl true
+  def execute(_ctx, updater) do
+    updater
+    |> TaskUpdater.start_work()
+    |> TaskUpdater.update_status(:auth_required)
+    |> TaskUpdater.requires_input()
+
+    :ok
+  end
+
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+end
+
 defmodule A2A.Test.BoomExecutor do
   @moduledoc "Raises, to exercise crash → failed."
   @behaviour A2A.Server.AgentExecutor
