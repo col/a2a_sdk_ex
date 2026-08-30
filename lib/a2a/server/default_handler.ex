@@ -15,6 +15,7 @@ defmodule A2A.Server.DefaultHandler do
     Message,
     SendMessageRequest,
     StreamResponse,
+    SubscribeToTaskRequest,
     Task,
     TaskArtifactUpdateEvent,
     TaskStatusUpdateEvent
@@ -100,6 +101,43 @@ defmodule A2A.Server.DefaultHandler do
   defp to_frame(%Message{} = m), do: StreamResponse.message(m)
   defp to_frame(%TaskStatusUpdateEvent{} = e), do: StreamResponse.status_update(e)
   defp to_frame(%TaskArtifactUpdateEvent{} = e), do: StreamResponse.artifact_update(e)
+
+  @impl true
+  @spec resubscribe(A2A.Server.t(), SubscribeToTaskRequest.t()) ::
+          {:ok, Enumerable.t()} | {:error, A2A.Error.t()}
+  def resubscribe(%A2A.Server{} = server, %SubscribeToTaskRequest{id: task_id}) do
+    # Subscribe first, then read the snapshot, so an event landing in the gap is
+    # seen (via the live stream) rather than missed.
+    :ok = Events.subscribe(server.pubsub, task_id)
+
+    case server.store.get(task_id, server.scope) do
+      {:error, :not_found} ->
+        Events.unsubscribe(server.pubsub, task_id)
+        {:error, A2A.Error.not_found(task_id)}
+
+      {:ok, %Task{} = task} ->
+        snapshot = StreamResponse.task(task)
+
+        live =
+          case Registry.lookup(server.registry, task_id) do
+            [{pid, _}] ->
+              server.pubsub
+              |> EventStream.stream(task_id,
+                monitor: pid,
+                idle_timeout: :infinity,
+                subscribe?: false
+              )
+              |> Stream.map(&to_frame(&1.payload))
+
+            [] ->
+              # No live execution (task already settled) — snapshot suffices.
+              Events.unsubscribe(server.pubsub, task_id)
+              []
+          end
+
+        {:ok, Stream.concat([snapshot], live)}
+    end
+  end
 
   @impl true
   @spec get_task(A2A.Server.t(), GetTaskRequest.t()) :: {:ok, Task.t()} | {:error, A2A.Error.t()}

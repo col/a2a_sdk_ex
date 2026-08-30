@@ -79,3 +79,40 @@ defmodule A2A.Test.ExitExecutor do
   @impl true
   def cancel(_ctx, _updater), do: :ok
 end
+
+defmodule A2A.Test.GatedExecutor do
+  @moduledoc "Starts work, blocks until `release/1`, then completes. For resubscribe tests."
+  @behaviour A2A.Server.AgentExecutor
+  alias A2A.Server.TaskUpdater
+  alias A2A.Types.Part
+
+  def release(task_id), do: send_to_gate(task_id, :release)
+
+  @impl true
+  def execute(ctx, updater) do
+    updater = TaskUpdater.start_work(updater)
+    register_gate(ctx.task_id)
+
+    receive do
+      :release -> :ok
+    after
+      5_000 -> :ok
+    end
+
+    TaskUpdater.complete(updater, Part.text("done"))
+    :ok
+  end
+
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+
+  # Minimal gate: register the executing pid under the task id in :persistent_term.
+  defp register_gate(task_id), do: :persistent_term.put({__MODULE__, task_id}, self())
+
+  defp send_to_gate(task_id, msg) do
+    case :persistent_term.get({__MODULE__, task_id}, nil) do
+      pid when is_pid(pid) -> send(pid, msg)
+      _ -> :ok
+    end
+  end
+end

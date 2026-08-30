@@ -1,6 +1,7 @@
 defmodule A2A.Server.StreamingTest do
   use ExUnit.Case, async: false
   alias A2A.Server.DefaultHandler
+  alias A2A.Test.GatedExecutor
   alias A2A.Types.{Message, Part, SendMessageRequest}
 
   setup do
@@ -80,5 +81,66 @@ defmodule A2A.Server.StreamingTest do
 
     assert :auth_required in states
     assert List.last(states) == :input_required
+  end
+
+  test "resubscribe on a finished task returns snapshot-only", %{server: server} do
+    {:ok, _} = DefaultHandler.send_message(server, req("hi", task_id: "done1"))
+
+    assert {:ok, stream} =
+             DefaultHandler.resubscribe(server, %A2A.Types.SubscribeToTaskRequest{id: "done1"})
+
+    frames = Enum.to_list(stream)
+
+    assert [
+             %A2A.Types.StreamResponse{
+               kind: :task,
+               task: %A2A.Types.Task{id: "done1", status: %{state: :completed}}
+             }
+           ] = frames
+  end
+
+  test "resubscribe on an unknown task returns not_found", %{server: server} do
+    assert {:error, %A2A.Error{code: :task_not_found}} =
+             DefaultHandler.resubscribe(server, %A2A.Types.SubscribeToTaskRequest{id: "nope"})
+  end
+
+  test "resubscribe on a live task yields snapshot then subsequent live frames",
+       %{server: server} do
+    server = %{server | executor: GatedExecutor}
+    caller = self()
+
+    # Start a streaming send that will pause after start_work until released.
+    spawn_link(fn ->
+      stream = DefaultHandler.send_message_stream(server, req("go", task_id: "live1"))
+      send(caller, {:frames, Enum.to_list(stream)})
+    end)
+
+    # Wait until the task has started and persisted a snapshot.
+    wait_for_task(server, "live1")
+
+    {:ok, resub} =
+      DefaultHandler.resubscribe(server, %A2A.Types.SubscribeToTaskRequest{id: "live1"})
+
+    # Release the executor so it completes; collect the resubscribe frames.
+    GatedExecutor.release("live1")
+    frames = Enum.to_list(resub)
+
+    assert [%A2A.Types.StreamResponse{kind: :task} | _rest] = frames
+    assert List.last(frames).status_update.status.state == :completed
+    assert_receive {:frames, _}, 1000
+  end
+
+  defp wait_for_task(server, id, tries \\ 50) do
+    case server.store.get(id, server.scope) do
+      {:ok, _} ->
+        :ok
+
+      _ when tries > 0 ->
+        Process.sleep(20)
+        wait_for_task(server, id, tries - 1)
+
+      _ ->
+        flunk("task #{id} never appeared in store")
+    end
   end
 end
