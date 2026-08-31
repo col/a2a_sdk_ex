@@ -10,7 +10,16 @@ defmodule A2A.Server.DefaultHandler do
   """
   @behaviour A2A.Server.RequestHandler
 
-  alias A2A.Server.{Events, EventStream, Execution, RequestContext, ResultAssembler, TaskUpdater}
+  alias A2A.Server.{
+    Events,
+    EventStream,
+    Execution,
+    RequestContext,
+    ResultAssembler,
+    StreamFrame,
+    TaskUpdater
+  }
+
   alias A2A.Server.Events.Event
 
   alias A2A.Types.{
@@ -22,9 +31,7 @@ defmodule A2A.Server.DefaultHandler do
     SendMessageRequest,
     StreamResponse,
     SubscribeToTaskRequest,
-    Task,
-    TaskArtifactUpdateEvent,
-    TaskStatusUpdateEvent
+    Task
   }
 
   @epoch DateTime.from_unix!(0)
@@ -106,7 +113,7 @@ defmodule A2A.Server.DefaultHandler do
         {:ok, pid} ->
           server.pubsub
           |> EventStream.stream(task_id, monitor: pid, idle_timeout: :infinity, subscribe?: false)
-          |> Stream.map(&to_frame(&1.payload))
+          |> Stream.map(&StreamFrame.of(&1.payload))
 
         {:error, {:already_started, _}} ->
           Events.unsubscribe(server.pubsub, task_id)
@@ -118,11 +125,6 @@ defmodule A2A.Server.DefaultHandler do
       end
     end
   end
-
-  defp to_frame(%Task{} = t), do: StreamResponse.task(t)
-  defp to_frame(%Message{} = m), do: StreamResponse.message(m)
-  defp to_frame(%TaskStatusUpdateEvent{} = e), do: StreamResponse.status_update(e)
-  defp to_frame(%TaskArtifactUpdateEvent{} = e), do: StreamResponse.artifact_update(e)
 
   @doc """
   Re-attaches to an in-flight (or already-settled) task and returns a lazy stream: a
@@ -162,7 +164,7 @@ defmodule A2A.Server.DefaultHandler do
         live_stream =
           server.pubsub
           |> EventStream.stream(task_id, monitor: pid, idle_timeout: :infinity, subscribe?: false)
-          |> Stream.map(&to_frame(&1.payload))
+          |> Stream.map(&StreamFrame.of(&1.payload))
 
         {task, live_stream}
 
