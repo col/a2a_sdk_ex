@@ -33,7 +33,13 @@ three-signal termination, see ADR-0009). Streams close at task-terminal only
 (ADR-0017): `send_message_stream/2` and `resubscribe/2` stay open through
 `input_required`/`auth_required`, bounded by `stream_idle_timeout` rather than
 `:DOWN`; the *blocking* path is the one that stops at an interrupted state, via
-a configurable, SDK-side `:drain_timeout`.
+a configurable, SDK-side `:drain_timeout`. That blocking fold does **not** run in
+the caller: `send_message/2` delegates to `A2A.Server.BlockingDrain`, a
+short-lived monitored child process that subscribes, folds and exits. Because
+§3.2.2 ends the wait at an interrupted state while the executor may still be
+emitting, the subscription has to die with the drain rather than leave events in
+the caller's mailbox. A `{:ready, pid}` handshake keeps the old guarantee that the
+subscription precedes `start_execution/5`.
 
 The **HTTP transport** has landed for both bindings (ADR-0010, ADR-0011):
 `A2A.Plug.Router` (mountable `Plug.Router`) + `A2A.Plug.JSONRPC` (envelope
