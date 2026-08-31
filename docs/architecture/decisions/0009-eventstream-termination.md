@@ -1,7 +1,7 @@
 # 9. EventStream — a shared subscription stream with three-signal termination
 
 Date: 2026-08-30
-Status: Accepted
+Status: Accepted; superseded in part by [ADR-0017](0017-streams-terminate-at-task-terminal.md)
 
 ## Context
 

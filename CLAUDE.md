@@ -29,8 +29,11 @@ walking skeleton (mountable supervision tree, process-per-task execution, PubSub
 event path, ETS `TaskStore`, and a blocking `DefaultHandler.send_message/get_task`).
 Phase 2 adds streaming — `DefaultHandler.send_message_stream/2` and `resubscribe/2`,
 both served by the shared `A2A.Server.EventStream` (subscribe-and-yield with
-three-signal termination, see ADR-0009), plus a configurable, SDK-side
-`:drain_timeout` for the blocking path.
+three-signal termination, see ADR-0009). Streams close at task-terminal only
+(ADR-0017): `send_message_stream/2` and `resubscribe/2` stay open through
+`input_required`/`auth_required`, bounded by `stream_idle_timeout` rather than
+`:DOWN`; the *blocking* path is the one that stops at an interrupted state, via
+a configurable, SDK-side `:drain_timeout`.
 
 The **HTTP transport** has landed for both bindings (ADR-0010, ADR-0011):
 `A2A.Plug.Router` (mountable `Plug.Router`) + `A2A.Plug.JSONRPC` (envelope
@@ -109,6 +112,13 @@ track the gap, not gate on it.
   GenServer name) is a candidate before multi-tenant or the transports phase spins
   up concurrent servers. **`A2A.Server.PushConfigStore.ETS` shares this same
   global-naming limitation** — same cause, same fix candidate.
+- **Streams close at terminal state only** (ADR-0017). `send_message_stream/2` and
+  `resubscribe/2` stay open through `input_required`/`auth_required` — a parked
+  task's stream is bounded by `stream_idle_timeout` (default 5 min), not by the
+  turn ending. The *blocking* `send_message/2` still returns at those interrupted
+  states (§3.2.2). A plug-level test that subscribes to a parked task must pass a
+  short `stream_idle_timeout` to `A2A.Server.Supervisor`, because `Router.call/2`
+  is synchronous and would otherwise block for the full default.
 - **Push delivery only sees events emitted after a dispatcher subscribes.** A
   `PushDispatcher` starts lazily on first config registration for a task; it is
   best-effort and forward-only, not a replay log — a config registered mid-task
@@ -140,6 +150,10 @@ track the gap, not gate on it.
   (`:DOWN`) without emitting a terminal. Distinguishing idle-timeout from `:DOWN`
   needs `EventStream` to surface a halt reason (a small contract change) — the
   result is correct, only the code/message is imprecise on a pathological path.
+  The same imprecision now extends to the streaming paths: `:monitor` is passed
+  only by the blocking drain (ADR-0017), so a stream attached to an execution
+  that dies without emitting a terminal event has no `:DOWN` to halt on and
+  instead waits out `stream_idle_timeout` before closing.
 
 ## Common commands
 

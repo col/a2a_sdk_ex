@@ -130,8 +130,10 @@ These hold across the system; violating them is a bug:
    [Persistence](architecture/persistence.md).
 5. **Terminal task states are immutable.** Once `completed`/`failed`/`canceled`/
    `rejected`, a task is never mutated.
-6. **`auth_required` does not terminate a stream** (unlike other non-working
-   states) — the executor may resume after out-of-band credential injection.
+6. **Only terminal task states terminate a stream.** Interrupted states
+   (`input_required`, `auth_required`) end a *blocking* caller's wait (spec §3.2.2)
+   while every attached stream stays open and the task stays resumable (§3.1.2,
+   §3.1.6). See [ADR-0017](architecture/decisions/0017-streams-terminate-at-task-terminal.md).
 7. **Nothing global is assumed.** PubSub name, stores, and hooks are passed at
    init so the whole tree mounts inside a host application's supervision tree.
 
