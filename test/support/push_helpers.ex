@@ -19,6 +19,11 @@ defmodule A2A.Test.RaisingSender do
   @moduledoc "Test `A2A.Server.PushSender` whose `send/3` always raises — proves the dispatcher survives a raising sender (best-effort delivery)."
   @behaviour A2A.Server.PushSender
 
+  # `send/3` unconditionally raises (by design, to exercise the dispatcher's
+  # rescue path), so Dialyzer infers `no_return` for the underlying `send/2`
+  # clause — expected and intentional here, not a defect.
+  @dialyzer {:nowarn_function, send: 2}
+
   @impl true
   def send(_config, _frame, _opts \\ []), do: raise("boom")
 end

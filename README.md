@@ -14,10 +14,11 @@ ported line-by-line.
 > `tasks/cancel` and `tasks/list` (shared `EventStream`, configurable drain
 > timeout) over the OTP process model — and both HTTP transports, JSON-RPC and
 > REST (`A2A.Plug.Router`/`A2A.Plug.JSONRPC`/`A2A.Plug.REST`/`A2A.Plug.SSE`,
-> optional `A2A.Standalone`), are implemented, with a runnable
-> [`examples/echo_server/`](examples/echo_server); push notifications and
-> multi-tenant scoping are the next phases. Design under
-> [`docs/`](docs/architecture.md).
+> optional `A2A.Standalone`), plus opt-in **push notifications** (config CRUD
+> on both bindings + best-effort webhook delivery, `push_notifications: true`),
+> are implemented, with a runnable
+> [`examples/echo_server/`](examples/echo_server); multi-tenant scoping is the
+> next phase. Design under [`docs/`](docs/architecture.md).
 
 ## Try it
 
@@ -52,6 +53,23 @@ curl -s -X POST http://localhost:5001/tasks/<task-id>:cancel | jq
 
 See the example's own [README](examples/echo_server/README.md) for the full
 walkthrough (agent card, streaming over both bindings).
+
+### Push notifications
+
+Enable delivery with `push_notifications: true` on `A2A.Server.Supervisor`,
+then register a webhook for a task (also settable inline via
+`SendMessageConfiguration.task_push_notification_config` on `message/send`):
+
+```bash
+curl -s -X POST http://localhost:5001/tasks/<task-id>/pushNotificationConfigs \
+  -H 'content-type: application/json' \
+  -d '{"url": "https://my-service.example/webhooks/a2a", "token": "shared-secret"}' | jq
+```
+
+Each subsequent task event is POSTed to the webhook as a `StreamResponse`
+(`application/a2a+json`), same shape as an SSE frame. A host that enables push
+must also set `AgentCard.capabilities.push_notifications = true` to advertise
+support — see [ADR-0012](docs/architecture/decisions/0012-push-notifications.md).
 
 ## Design decisions
 

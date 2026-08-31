@@ -6,6 +6,8 @@ defmodule A2A.Server.Supervisor do
   """
   use Supervisor
 
+  alias A2A.Server.PushSender
+
   @spec start_link(keyword()) :: Supervisor.on_start()
   def start_link(opts) do
     name = Keyword.fetch!(opts, :name)
@@ -39,7 +41,7 @@ defmodule A2A.Server.Supervisor do
       push_timeout: Keyword.get(opts, :push_timeout, 5_000),
       push_url_validator:
         if(push?,
-          do: Keyword.get(opts, :push_url_validator, A2A.Server.PushSender.default_url_validator())
+          do: Keyword.get(opts, :push_url_validator, PushSender.default_url_validator())
         ),
       push_registry: if(push?, do: push_registry),
       push_dyn_sup: if(push?, do: push_dyn_sup)

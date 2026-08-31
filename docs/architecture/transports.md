@@ -15,16 +15,18 @@ designed so it can be added as a third adapter without touching agent code.
 (REST transport mechanics), `A2A.Plug.SSE` (streaming, reused by both
 bindings), the agent-card route, and optional `A2A.Standalone` (Bandit).
 JSON-RPC serves `message/send`, `message/stream`, `tasks/get`,
-`tasks/cancel`, `tasks/list`, and `tasks/resubscribe`; REST serves the same
-six operations over resource-style routes. Push-notification-config routes
-and `/{tenant}/…` scoping remain deferred (see
+`tasks/cancel`, `tasks/list`, `tasks/resubscribe`, and the four
+push-notification-config methods; REST serves the same operations over
+resource-style routes. `/{tenant}/…` scoping remains deferred (see
 [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md)).
 
 Rationale: [ADR-0003](decisions/0003-jsonrpc-and-rest-transports.md) (transports),
 [ADR-0006](decisions/0006-plug-first-mounting.md) (plug-first mounting),
 [ADR-0010](decisions/0010-jsonrpc-transport-first.md) (JSON-RPC ships first;
-REST follows), and [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md)
-(REST binding + `cancel`/`list` land).
+REST follows), [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md)
+(REST binding + `cancel`/`list` land), and
+[ADR-0012](decisions/0012-push-notifications.md) (push notification config +
+delivery land).
 
 ## One handler, N transports
 
@@ -68,6 +70,10 @@ Routes exposed today:
 | `GET /tasks` | REST: `tasks/list` (`application/a2a+json`) | below |
 | `POST /tasks/:id:cancel` | REST: `tasks/cancel` (`application/a2a+json`) | below |
 | `GET /tasks/:id:subscribe` | REST: `tasks/resubscribe` (SSE) | below |
+| `POST /tasks/:task_id/pushNotificationConfigs` | REST: `tasks/pushNotificationConfig/set` (`application/a2a+json`) | below |
+| `GET /tasks/:task_id/pushNotificationConfigs` | REST: `tasks/pushNotificationConfig/list` (`application/a2a+json`) | below |
+| `GET /tasks/:task_id/pushNotificationConfigs/:id` | REST: `tasks/pushNotificationConfig/get` (`application/a2a+json`) | below |
+| `DELETE /tasks/:task_id/pushNotificationConfigs/:id` | REST: `tasks/pushNotificationConfig/delete` (`application/a2a+json`) | below |
 
 Routes follow the vendored proto's `google.api.http` annotations exactly — no
 invented `/v1` prefix.
@@ -86,9 +92,10 @@ split that keeps server deps out of the graph for consumers who don't need them.
 - Single `POST /` endpoint (`A2A.Plug.Router`); `A2A.Plug.JSONRPC` decodes the
   envelope, dispatches by JSON-RPC `method` name to the corresponding
   `A2A.Server.DefaultHandler` callback, and re-encodes the result.
-- Six methods are wired: `message/send`, `message/stream` (unary vs. stream),
-  `tasks/get`, `tasks/cancel`, `tasks/list`, `tasks/resubscribe`. An unknown
-  method renders `-32601`.
+- Ten methods are wired: `message/send`, `message/stream` (unary vs. stream),
+  `tasks/get`, `tasks/cancel`, `tasks/list`, `tasks/resubscribe`, and
+  `tasks/pushNotificationConfig/{set,get,list,delete}`. An unknown method
+  renders `-32601`.
 - Requests/responses use the JSON-RPC 2.0 envelope; envelope-level errors
   (parse error `-32700`, invalid request `-32600`, method not found `-32601`,
   invalid params `-32602`) and semantic errors render via
@@ -121,9 +128,11 @@ render.
   marker, so the proto's literal `:send`/`:stream` suffixes are written
   escaped in the router (`post "/message\:send"`), and `:cancel`/`:subscribe`
   are recovered by matching the `:id` segment and stripping the known suffix.
-- **Deferred:** push-notification-config routes
-  (`/tasks/{id}/pushNotificationConfigs…` — the runtime implements no push
-  config yet) and `/{tenant}/…` additional bindings (scoping is still a
+- Push-notification-config routes (`/tasks/{task_id}/pushNotificationConfigs…`,
+  landed per [ADR-0012](decisions/0012-push-notifications.md)) return
+  `push_notification_not_supported` (→ `400`) when the server wasn't started
+  with `push_notifications: true`.
+- **Deferred:** `/{tenant}/…` additional bindings (scoping is still a
   single `A2A.Scope`; non-tenant routes only for now).
 
 ## SSE streaming (`A2A.Plug.SSE`) — **landed**
@@ -175,4 +184,5 @@ generated protobuf-binary wire layer sitting behind the public
 - [ADR-0003](decisions/0003-jsonrpc-and-rest-transports.md),
   [ADR-0006](decisions/0006-plug-first-mounting.md),
   [ADR-0010](decisions/0010-jsonrpc-transport-first.md),
-  [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md).
+  [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md),
+  [ADR-0012](decisions/0012-push-notifications.md).
