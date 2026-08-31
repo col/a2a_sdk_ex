@@ -160,6 +160,11 @@ annotations exactly, same as every other REST route (ADR-0011).
   a plain subscriber).
 - Runtime dependency graph gains one **optional** dependency: `req` (falls
   back to OTP's `:httpc`, always available). No new **hard** dependency.
+- **Delete is idempotent by design:** `delete_push_config` on an unknown
+  `{task_id, id}` returns success (`:deleted`), not `:task_not_found` — matching
+  the reference Python and JS A2A SDKs' delete semantics and standard HTTP
+  `DELETE` idempotency. Only **get** returns `:task_not_found` for an unknown id
+  (see spec §8).
 - **Deferred, additive behind these seams:** receiver-side signature/JWT
   verification (client responsibility, out of scope per spec §13); retry
   policies / dead-letter handling for failed deliveries (current behavior:

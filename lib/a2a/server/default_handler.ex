@@ -468,7 +468,7 @@ defmodule A2A.Server.DefaultHandler do
 
     case validate_url(server, stored.url) do
       :ok ->
-        :ok = server.push_store.put(stored, server.scope)
+        best_effort_put(server, stored)
         ensure_dispatcher(server, task_id)
         :ok
 
@@ -480,6 +480,35 @@ defmodule A2A.Server.DefaultHandler do
   end
 
   defp maybe_register_inline_push(_server, _task_id, _req), do: :ok
+
+  # Best-effort store write for the INLINE registration path only: a custom
+  # `push_store.put/2` that raises, exits, or returns something other than `:ok`
+  # must not fail `message/send` (the config CRUD path, `create_push_config/2`,
+  # deliberately lets a store failure surface — this helper is inline-only).
+  defp best_effort_put(server, stored) do
+    case server.push_store.put(stored, server.scope) do
+      :ok ->
+        :ok
+
+      other ->
+        Logger.warning(
+          "inline push config store failed task_id=#{stored.task_id}: #{inspect(other)}"
+        )
+
+        :ok
+    end
+  rescue
+    e ->
+      Logger.warning("inline push config store raised task_id=#{stored.task_id}: #{inspect(e)}")
+      :ok
+  catch
+    kind, reason ->
+      Logger.warning(
+        "inline push config store #{kind} task_id=#{stored.task_id}: #{inspect(reason)}"
+      )
+
+      :ok
+  end
 
   # Best-effort dispatcher start: a failure to start the delivery process must not
   # fail config creation (config is persisted) nor the message/send (inline path).

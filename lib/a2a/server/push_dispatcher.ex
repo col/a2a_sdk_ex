@@ -45,11 +45,17 @@ defmodule A2A.Server.PushDispatcher do
     |> Task.async_stream(
       fn cfg -> dispatch_one(server, task_id, cfg, frame) end,
       max_concurrency: max(length(configs), 1),
-      timeout: server.push_timeout + 1_000,
+      timeout: stream_timeout(server.push_timeout),
       on_timeout: :kill_task
     )
     |> Stream.run()
   end
+
+  # `server.push_timeout` may be `:infinity` (a valid `timeout_opt()`); guard the
+  # `+ 1_000` so an `:infinity` host config doesn't crash the dispatcher on first
+  # delivery (`:infinity + 1_000` raises `ArithmeticError`).
+  defp stream_timeout(:infinity), do: :infinity
+  defp stream_timeout(t), do: t + 1_000
 
   defp dispatch_one(server, task_id, cfg, frame) do
     case server.push_sender.send(cfg, frame, timeout: server.push_timeout) do

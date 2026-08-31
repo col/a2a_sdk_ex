@@ -1,7 +1,7 @@
 defmodule A2A.Server.PushDispatcherTest do
   use ExUnit.Case, async: false
   alias A2A.Server.{DefaultHandler, PushConfigStore}
-  alias A2A.Test.{CapturingSender, DelayingSender, PartialRaisingSender}
+  alias A2A.Test.{CapturingSender, DelayingSender, PartialRaisingSender, RaisingPushStore}
 
   alias A2A.Types.{
     Message,
@@ -99,6 +99,30 @@ defmodule A2A.Server.PushDispatcherTest do
     # the missing-frames assertion above already rules out).
     assert match?([{_pid, _}], Registry.lookup(server.push_registry, task_id)) or
              Registry.lookup(server.push_registry, task_id) == []
+  end
+
+  test "push_timeout: :infinity does not crash the dispatcher (delivery still happens)", %{
+    server: server
+  } do
+    server = %{server | push_timeout: :infinity}
+    cfg = %TaskPushNotificationConfig{url: "https://h/cb", token: "t"}
+    {:ok, _task} = DefaultHandler.send_message(server, send_req("task-infinite-timeout", cfg))
+
+    frames = collect_pushes([])
+    assert Enum.any?(frames, &match?(%StreamResponse{kind: :status_update}, &1))
+    assert Enum.any?(frames, &match?(%StreamResponse{kind: :artifact_update}, &1))
+    assert List.last(frames).status_update.status.state == :completed
+  end
+
+  test "inline registration is best-effort against a raising push_store.put (message/send still succeeds)",
+       %{server: server} do
+    server = %{server | push_store: RaisingPushStore}
+    cfg = %TaskPushNotificationConfig{url: "https://h/cb", token: "t"}
+
+    assert {:ok, %Task{} = task} =
+             DefaultHandler.send_message(server, send_req("task-raising-store", cfg))
+
+    assert task.status.state == :completed
   end
 
   test "inline config with an invalid url does not fail message/send", %{server: server} do

@@ -259,8 +259,12 @@ the host owns their card; documented as a required step to advertise support.
 ## 8. Error handling & security
 
 - Push disabled → all four ops return `:push_notification_not_supported`.
-- Unknown `{task_id, id}` on get/delete → `:task_not_found` (reuses the existing
+- Unknown `{task_id, id}` on **get** → `:task_not_found` (reuses the existing
   not-found projection; there is no distinct config-not-found A2A code).
+- Unknown `{task_id, id}` on **delete** → **idempotent success** (`:deleted`),
+  not an error. This is deliberate: it matches the reference Python and JS A2A
+  SDKs' delete semantics and standard HTTP `DELETE` idempotency (deleting an
+  already-absent resource is not itself an error).
 - URL validation failure on set → `:invalid_params`.
 - Delivery failures (non-2xx, timeout, transport error) are **logged and
   swallowed** — best-effort; never surfaced to the task or the caller.

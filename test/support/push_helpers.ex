@@ -81,6 +81,31 @@ defmodule A2A.Test.DelayingSender do
   end
 end
 
+defmodule A2A.Test.RaisingPushStore do
+  @moduledoc """
+  Test `A2A.Server.PushConfigStore` whose `put/2` always raises — proves the
+  INLINE registration path in `DefaultHandler.maybe_register_inline_push/3` is
+  best-effort against a broken store (a raise there must not fail `message/send`).
+  `get/3`, `list/2`, `delete/3` delegate to the real ETS store so the rest of the
+  flow (e.g. dispatcher lookups) behaves normally.
+  """
+  @behaviour A2A.Server.PushConfigStore
+
+  alias A2A.Server.PushConfigStore.ETS
+
+  @impl true
+  def put(_config, _scope), do: raise("boom: push store put failed")
+
+  @impl true
+  def get(task_id, id, scope), do: ETS.get(task_id, id, scope)
+
+  @impl true
+  def list(task_id, scope), do: ETS.list(task_id, scope)
+
+  @impl true
+  def delete(task_id, id, scope), do: ETS.delete(task_id, id, scope)
+end
+
 defmodule A2A.Test.WebhookReceiver do
   @moduledoc "Tiny Bandit+Plug receiver that forwards each POST (headers+body) to a pid. For live push-delivery tests."
   import Plug.Conn
