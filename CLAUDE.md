@@ -46,6 +46,12 @@ transport end-to-end. It has its **own `mix.exs`** (path-deps on this repo) and
 runs standalone via `mix run --no-halt` from that directory — it is **not**
 part of this repo's `mix test` or `mix precommit`.
 
+A2A spec conformance is measured with the official
+[TCK](https://github.com/a2aproject/a2a-tck) via `scripts/run_tck.sh` (a
+non-blocking, report-only `compliance` CI job runs it against the echo server on
+every build) — see `docs/tck-compliance.md`. We are **not** compliant yet; the
+harness exists to track the gap, not gate on it.
+
 ### Known constraints / gotchas (server runtime)
 
 - **`A2A.Server.TaskStore.ETS` is globally named** (`name: __MODULE__`), so **two
@@ -81,6 +87,7 @@ part of this repo's `mix test` or `mix precommit`.
 | `mix credo --strict` | Lint gate (kept clean) |
 | `mix dialyzer` | Type checking (CI) |
 | `mix docs` | Build ExDoc (HexDocs) |
+| `scripts/run_tck.sh` | Run the A2A TCK compliance suite against the echo server (needs a `../a2a-tck` checkout + `uv`; see `docs/tck-compliance.md`). Report-only, **not** part of `mix test` |
 
 The required Elixir version is declared in `mix.exs` (`elixir:`) — check it there
 rather than assuming. `mix.lock` pins some dev/test deps deliberately; don't bump
