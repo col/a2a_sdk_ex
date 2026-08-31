@@ -63,7 +63,7 @@ defmodule A2A.Plug.RESTPushTest do
     conn = Router.call(req(:post, "/tasks/t1/pushNotificationConfigs", body), opts)
     assert conn.status == 400
 
-    assert Jason.decode!(conn.resp_body)["details"] |> hd() |> Map.get("reason") ==
-             "PUSH_NOTIFICATION_NOT_SUPPORTED"
+    assert %{"error" => %{"details" => [detail]}} = Jason.decode!(conn.resp_body)
+    assert detail["reason"] == "PUSH_NOTIFICATION_NOT_SUPPORTED"
   end
 end

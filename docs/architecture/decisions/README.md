@@ -20,6 +20,7 @@ supersedes an earlier one.
 | [0010](0010-jsonrpc-transport-first.md) | JSON-RPC transport first; REST follows | Accepted |
 | [0011](0011-rest-binding-and-cancel-list.md) | REST binding, `tasks/cancel`, and `tasks/list` land | Accepted |
 | [0012](0012-push-notifications.md) | Push notification config CRUD + best-effort delivery engine | Accepted |
+| [0013](0013-spec-faithful-error-representation.md) | Spec-faithful error representation on both bindings | Accepted |
 
 ADRs 0001–0008 were taken together during initial architecture planning (2026-08-29),
 informed by a feature inventory of the official

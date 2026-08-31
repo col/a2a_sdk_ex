@@ -44,21 +44,40 @@ defmodule A2A.Plug.RESTTest do
     id
   end
 
-  test "GET /tasks/:id returns a task as application/a2a+json for a known id", %{opts: opts} do
+  # Spec 11.1: "Content-Type: application/json for requests and responses". The
+  # registered application/a2a+json media type (14.1.1) is not what the binding
+  # section mandates, and a client matching on "application/json" never sees it.
+  test "GET /tasks/:id returns a task as application/json for a known id", %{opts: opts} do
     id = create_task(opts)
 
     conn = call(conn(:get, "/tasks/#{id}"), opts)
     assert conn.status == 200
-    assert get_resp_header(conn, "content-type") |> hd() =~ "application/a2a+json"
+    assert get_resp_header(conn, "content-type") |> hd() =~ "application/json"
     assert Jason.decode!(conn.resp_body)["id"] == id
   end
 
-  test "GET /tasks/:id unknown -> 404 google.rpc.Status body", %{opts: opts} do
+  test "GET /tasks/:id unknown -> 404 AIP-193 error body", %{opts: opts} do
     conn = call(conn(:get, "/tasks/nope"), opts)
+
     assert conn.status == 404
-    body = Jason.decode!(conn.resp_body)
-    assert body["code"] == 5
-    assert [%{"reason" => "TASK_NOT_FOUND", "domain" => "a2a-protocol.org"}] = body["details"]
+    assert get_resp_header(conn, "content-type") |> hd() =~ "application/json"
+
+    assert %{"error" => error} = Jason.decode!(conn.resp_body)
+    assert error["code"] == 404
+    assert error["status"] == "NOT_FOUND"
+    assert [%{"reason" => "TASK_NOT_FOUND", "domain" => "a2a-protocol.org"}] = error["details"]
+  end
+
+  test "a malformed body is rendered as an AIP-193 error too", %{opts: opts} do
+    conn =
+      conn(:post, "/message:send", ~s({"message": {"role": "NOPE"}}))
+      |> put_req_header("content-type", "application/json")
+      |> call(opts)
+
+    assert conn.status == 400
+
+    assert %{"error" => %{"code" => 400, "status" => "INVALID_ARGUMENT"}} =
+             Jason.decode!(conn.resp_body)
   end
 
   test "POST /message:send returns a SendMessageResponse", %{opts: opts} do

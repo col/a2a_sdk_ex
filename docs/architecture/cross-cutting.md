@@ -72,40 +72,67 @@ per-transport rendering:
 | `:content_type_not_supported` | Unacceptable input/output mode |
 | `:push_notification_not_supported` | Agent does not advertise push notifications |
 | `:invalid_agent_response` | Executor produced an invalid event |
-| `:extension_required` | A required extension was not activated |
+| `:extended_agent_card_not_configured` | Extended card advertised but not configured |
+| `:extension_support_required` | A required extension was not activated |
+| `:version_not_supported` | Unsupported `A2A-Version` service parameter |
+
+The table is spec §5.4 verbatim. Three codes are the SDK's own and have no
+row of their own in the spec: `:task_not_continuable` and `:task_in_progress`
+render as `UnsupportedOperation` (§3.4 and §3.6 name that error for messages
+sent to, and subscribes on, a terminal task), and `:timeout` renders as an
+internal error. Inventing a `reason` for them would be worse than reusing one:
+a reason outside the spec's set is rejected by conformant clients.
 
 Rendering:
 
 - `A2A.Error.to_jsonrpc/1` — **landed** — renders a JSON-RPC error object
-  (`%{"code" => integer, "message" => binary, optional "data" => term}`). Code
-  mapping:
+  (`%{"code" => integer, "message" => binary, optional "data" => term}`). For
+  A2A-specific errors `data` is the §9.5 **array** carrying one
+  `google.rpc.ErrorInfo`; for the standard JSON-RPC errors it is the error's
+  own `data`, omitted when absent. Code mapping:
 
   | Semantic error | JSON-RPC code |
   | --- | --- |
   | `:task_not_found` | `-32001` |
-  | `:task_not_continuable` / `:task_in_progress` / `:task_not_cancelable` | `-32002` |
-  | `:unsupported_operation` | `-32004` |
+  | `:task_not_cancelable` | `-32002` |
+  | `:push_notification_not_supported` | `-32003` |
+  | `:unsupported_operation` / `:task_not_continuable` / `:task_in_progress` | `-32004` |
   | `:content_type_not_supported` | `-32005` |
   | `:invalid_agent_response` | `-32006` |
+  | `:extended_agent_card_not_configured` | `-32007` |
+  | `:extension_support_required` | `-32008` |
+  | `:version_not_supported` | `-32009` |
+  | `:invalid_params` | `-32602` |
   | internal / timeout / unmapped | `-32603` |
 
 - `A2A.Error.to_rest/1` — **landed** — renders `{http_status, body}` where
-  `body` is `google.rpc.Status` ProtoJSON: a canonical `google.rpc.Code`
-  `"code"` int, `"message"`, and a `"details"` array carrying one
-  `google.rpc.ErrorInfo` (`reason` upper-snake-case, `domain:
-  "a2a-protocol.org"`, `metadata` stringified from `A2A.Error.data`). HTTP
-  status mapping (spec §5.4):
+  `body` is the AIP-193 representation §11.6 mandates:
+
+  ```json
+  {"error": {"code": 404, "status": "NOT_FOUND", "message": "…",
+             "details": [{"@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                          "reason": "TASK_NOT_FOUND",
+                          "domain": "a2a-protocol.org",
+                          "metadata": {"taskId": "t-1"}}]}}
+  ```
+
+  `error.code` is the **HTTP status** (not a `google.rpc.Code` int), `status`
+  the gRPC status name, and `metadata` is `A2A.Error.data` stringified with
+  camelCase keys (§5.5). `details` is omitted for errors with no A2A reason.
+  HTTP status mapping (spec §5.4):
 
   | Semantic error | HTTP status |
   | --- | --- |
   | `:task_not_found` | `404` |
-  | `:task_not_cancelable` / `:task_not_continuable` / `:unsupported_operation` / `:content_type_not_supported` / `:push_notification_not_supported` | `400` |
-  | `:task_in_progress` | `409` |
-  | `:invalid_agent_response` / internal / unmapped | `500` |
+  | `:task_not_cancelable` | `409` |
+  | `:content_type_not_supported` | `415` |
+  | `:invalid_agent_response` | `502` |
+  | `:unsupported_operation` / `:task_not_continuable` / `:task_in_progress` / `:push_notification_not_supported` / `:extended_agent_card_not_configured` / `:extension_support_required` / `:version_not_supported` / `:invalid_params` | `400` |
+  | internal / unmapped | `500` |
   | `:timeout` | `504` |
 
   `to_jsonrpc/1` and `to_rest/1` are two projections of **one** table in
-  `A2A.Error` keyed by error atom (`{jsonrpc_code, http_status, grpc_code,
+  `A2A.Error` keyed by error atom (`{jsonrpc_code, http_status, grpc_status,
   reason}`), so the two renderers cannot drift — adding a semantic error is
   one row, read by both. See
   [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md).

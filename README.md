@@ -35,7 +35,7 @@ curl -s http://localhost:5001/ \
   }' | jq
 ```
 
-REST — same call, resource-style, `application/a2a+json`:
+REST — same call, resource-style, `application/json`:
 
 ```bash
 curl -s http://localhost:5001/message:send \

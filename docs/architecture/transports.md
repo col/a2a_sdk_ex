@@ -64,16 +64,16 @@ Routes exposed today:
 | --- | --- | --- |
 | `GET /.well-known/agent-card.json` | Serve the `AgentCard` | [Data model](data-model.md) |
 | `POST /` | JSON-RPC endpoint (`SendMessage`, `SendStreamingMessage`, `GetTask`, `CancelTask`, `ListTasks`, `SubscribeToTask`; streaming methods respond as SSE) | below |
-| `POST /message:send` | REST: `SendMessage` (`application/a2a+json`) | below |
+| `POST /message:send` | REST: `SendMessage` (`application/json`) | below |
 | `POST /message:stream` | REST: `SendStreamingMessage` (SSE) | below |
-| `GET /tasks/:id` | REST: `GetTask` (`application/a2a+json`) | below |
-| `GET /tasks` | REST: `ListTasks` (`application/a2a+json`) | below |
-| `POST /tasks/:id:cancel` | REST: `CancelTask` (`application/a2a+json`) | below |
+| `GET /tasks/:id` | REST: `GetTask` (`application/json`) | below |
+| `GET /tasks` | REST: `ListTasks` (`application/json`) | below |
+| `POST /tasks/:id:cancel` | REST: `CancelTask` (`application/json`) | below |
 | `GET /tasks/:id:subscribe` | REST: `SubscribeToTask` (SSE) | below |
-| `POST /tasks/:task_id/pushNotificationConfigs` | REST: `CreateTaskPushNotificationConfig` (`application/a2a+json`) | below |
-| `GET /tasks/:task_id/pushNotificationConfigs` | REST: `ListTaskPushNotificationConfigs` (`application/a2a+json`) | below |
-| `GET /tasks/:task_id/pushNotificationConfigs/:id` | REST: `GetTaskPushNotificationConfig` (`application/a2a+json`) | below |
-| `DELETE /tasks/:task_id/pushNotificationConfigs/:id` | REST: `DeleteTaskPushNotificationConfig` (`application/a2a+json`) | below |
+| `POST /tasks/:task_id/pushNotificationConfigs` | REST: `CreateTaskPushNotificationConfig` (`application/json`) | below |
+| `GET /tasks/:task_id/pushNotificationConfigs` | REST: `ListTaskPushNotificationConfigs` (`application/json`) | below |
+| `GET /tasks/:task_id/pushNotificationConfigs/:id` | REST: `GetTaskPushNotificationConfig` (`application/json`) | below |
+| `DELETE /tasks/:task_id/pushNotificationConfigs/:id` | REST: `DeleteTaskPushNotificationConfig` (`application/json`) | below |
 
 Routes follow the vendored proto's `google.api.http` annotations exactly — no
 invented `/v1` prefix.
@@ -115,10 +115,15 @@ render.
 - Resource-style routes (see the table above), proto3-JSON request/response
   bodies via `A2A.JSON`. Routes follow the vendored proto's
   `google.api.http` annotations exactly — no invented `/v1` prefix.
-- Success responses use content type `application/a2a+json`.
+- Responses use content type `application/json`, per spec §11.1 ("Content-Type:
+  `application/json` for requests and responses"). The registered
+  `application/a2a+json` media type (§14.1.1, and the §6 examples) is
+  deliberately unused: it is not what the binding section requires, and a
+  client matching on the `application/json` subtype never sees it.
 - Errors render via `A2A.Error.to_rest/1` — `{http_status, body}` where `body`
-  is `google.rpc.Status` ProtoJSON (a `code` int, `message`, and a `details`
-  array with one `google.rpc.ErrorInfo`). See
+  is the AIP-193 representation §11.6 mandates: an `error` object whose `code`
+  is the HTTP status, `status` the gRPC status name, and `details` an array
+  carrying one `google.rpc.ErrorInfo`. See
   [Cross-cutting concerns](cross-cutting.md#errors) for the full status table.
 - Streaming routes (`message:stream`, `tasks/:id:subscribe`) use the same
   `A2A.Plug.SSE` core as JSON-RPC, via `SSE.respond/4`'s frame-formatter

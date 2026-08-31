@@ -35,14 +35,17 @@ three-signal termination, see ADR-0009), plus a configurable, SDK-side
 The **HTTP transport** has landed for both bindings (ADR-0010, ADR-0011):
 `A2A.Plug.Router` (mountable `Plug.Router`) + `A2A.Plug.JSONRPC` (envelope
 decode/dispatch) + `A2A.Plug.REST` (REST transport mechanics — path/query/body
-→ typed request via `A2A.JSON`, `application/a2a+json` responses) +
+→ typed request via `A2A.JSON`, `application/json` responses) +
 `A2A.Plug.SSE` (streaming responses, shared by both bindings via a
 frame-formatter argument), plus an optional `A2A.Standalone` (Bandit-backed)
 for running without a host web framework. All six operations are wired on
 both bindings — `SendMessage`, `SendStreamingMessage`, `GetTask`,
 `CancelTask`, `ListTasks`, `SubscribeToTask` — rendered via
-`A2A.Error.to_jsonrpc/1` (JSON-RPC) or `A2A.Error.to_rest/1` (REST,
-`google.rpc.Status` body), two projections of one error-code table. `plug` is
+`A2A.Error.to_jsonrpc/1` (JSON-RPC) or `A2A.Error.to_rest/1` (REST, AIP-193
+body), two projections of one error-code table — spec §5.4 verbatim since
+ADR-0013, with A2A-specific errors carrying a `google.rpc.ErrorInfo` in the
+JSON-RPC `data` **array** (§9.5) and the REST `error.details` array (§11.6),
+and standard JSON-RPC errors carrying none. `plug` is
 now a **hard** runtime dep; `bandit` is optional (only needed for
 `A2A.Standalone`). Cancellation needed `A2A.Server.Execution` restructured to
 run the author's `execute/2` in an unlinked, monitored **child process**, so

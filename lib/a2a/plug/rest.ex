@@ -2,7 +2,7 @@ defmodule A2A.Plug.REST do
   @moduledoc """
   HTTP+JSON/REST binding mechanics: build a typed request from path/query/body,
   call `A2A.Server.DefaultHandler`, and tag the result for the router to render as
-  `application/a2a+json` (or an error via `A2A.Error.to_rest/1`). Transport
+  `application/json` (or an error via `A2A.Error.to_rest/1`). Transport
   mechanics only — no `Plug.Conn`, no sockets. Streaming routes return a lazy
   frame enumerable for `A2A.Plug.SSE` to chunk. Paths follow the vendored proto's
   `google.api.http` annotations.
@@ -23,7 +23,11 @@ defmodule A2A.Plug.REST do
     TaskPushNotificationConfig
   }
 
-  @content_type "application/a2a+json"
+  # Spec section 11.1 mandates `application/json` for REST requests and responses.
+  # `application/a2a+json` (registered in section 14.1.1, and used by the section 6
+  # examples) is deliberately not used here: it is not what the binding section
+  # requires, and it fails a client matching on the `application/json` subtype.
+  @content_type "application/json"
   @spec content_type() :: String.t()
   def content_type, do: @content_type
 
@@ -189,18 +193,12 @@ defmodule A2A.Plug.REST do
     {:error, status, body}
   end
 
+  # A decode failure is an ordinary A2A.Error, so it renders through the same
+  # AIP-193 projection as every other error rather than a hand-built body.
   defp bad_request(reason) do
-    {:error, 400,
-     %{
-       "code" => 3,
-       "message" => "invalid request: #{inspect(reason)}",
-       "details" => [
-         %{
-           "@type" => "type.googleapis.com/google.rpc.ErrorInfo",
-           "reason" => "INVALID_ARGUMENT",
-           "domain" => "a2a-protocol.org"
-         }
-       ]
-     }}
+    render_error(%A2A.Error{
+      code: :invalid_params,
+      message: "invalid request: #{inspect(reason)}"
+    })
   end
 end
