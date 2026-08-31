@@ -23,6 +23,31 @@ defmodule A2A.Test.RaisingSender do
   def send(_config, _frame, _opts \\ []), do: raise("boom")
 end
 
+defmodule A2A.Test.PartialRaisingSender do
+  @moduledoc """
+  Test `A2A.Server.PushSender` that RAISES when `config.url` contains `"raise"` and
+  otherwise forwards `{:push, config, frame}` to the attached pid (like
+  `A2A.Test.CapturingSender`). Proves a raising dispatch for one config neither
+  aborts a sibling config's delivery within the same event nor kills the dispatcher
+  across events — the normal config must keep receiving every event.
+  """
+  @behaviour A2A.Server.PushSender
+
+  def attach(pid \\ self()), do: :persistent_term.put({__MODULE__, :pid}, pid)
+
+  @impl true
+  def send(config, frame, _opts \\ []) do
+    if String.contains?(config.url, "raise"), do: raise("boom")
+
+    case :persistent_term.get({__MODULE__, :pid}, nil) do
+      pid when is_pid(pid) -> Kernel.send(pid, {:push, config, frame})
+      _ -> :ok
+    end
+
+    :ok
+  end
+end
+
 defmodule A2A.Test.DelayingSender do
   @moduledoc """
   Test `A2A.Server.PushSender` that records an ordered `{:delivered, config_id, frame}`

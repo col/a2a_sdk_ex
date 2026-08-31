@@ -1,7 +1,7 @@
 defmodule A2A.Server.PushDispatcherTest do
   use ExUnit.Case, async: false
   alias A2A.Server.{DefaultHandler, PushConfigStore}
-  alias A2A.Test.{CapturingSender, DelayingSender, RaisingSender}
+  alias A2A.Test.{CapturingSender, DelayingSender, PartialRaisingSender}
 
   alias A2A.Types.{
     Message,
@@ -57,21 +57,48 @@ defmodule A2A.Server.PushDispatcherTest do
     assert List.last(frames).status_update.status.state == :completed
   end
 
-  test "a raising sender does not take down the dispatcher or the task path", %{server: server} do
-    server = %{server | push_sender: RaisingSender}
-    cfg = %TaskPushNotificationConfig{url: "https://h/cb", token: "t"}
+  test "a raising sender neither aborts a sibling delivery nor kills the dispatcher",
+       %{server: server} do
+    # Directly observe dispatcher SURVIVAL + CONTINUED DELIVERY: with a raising
+    # config alongside a normal one, the normal config must still receive EVERY
+    # event (incl. the terminal one that arrives after the earlier raise). Against
+    # a non-crash-safe dispatch, the raise crashes the dispatcher mid-deliver, so
+    # the normal config misses subsequent events → this fails.
+    server = %{server | push_sender: PartialRaisingSender}
+    PartialRaisingSender.attach(self())
 
-    # message/send must succeed to :completed — delivery is best-effort, the
-    # raising sender is caught and logged, never propagated to the task path.
-    assert {:ok, %Task{} = task} =
-             DefaultHandler.send_message(server, send_req("task-raise", cfg))
+    task_id = "task-partial-raise"
 
-    assert task.status.state == :completed
+    for url <- ["https://raise/cb", "https://ok/cb"] do
+      {:ok, _} =
+        DefaultHandler.create_push_config(server, %TaskPushNotificationConfig{
+          task_id: task_id,
+          url: url
+        })
+    end
 
-    # The dispatcher process (if still alive) and the whole tree survive: the
-    # supervised server keeps serving — a second send on a fresh task works.
-    assert {:ok, %Task{}} =
-             DefaultHandler.send_message(server, send_req("task-raise-2", cfg))
+    {:ok, _task} =
+      DefaultHandler.send_message(server, %SendMessageRequest{
+        message: %Message{
+          message_id: "m_#{System.unique_integer([:positive])}",
+          role: :user,
+          task_id: task_id,
+          parts: [Part.text("hi")]
+        }
+      })
+
+    # Only the normal (non-raising) config forwards {:push, ...}.
+    normal_frames = for {:push, %{url: "https://ok/cb"}, frame} <- collect_all_pushes([]), do: frame
+
+    assert Enum.any?(normal_frames, &match?(%StreamResponse{kind: :status_update}, &1))
+    assert Enum.any?(normal_frames, &match?(%StreamResponse{kind: :artifact_update}, &1))
+    assert List.last(normal_frames).status_update.status.state == :completed
+
+    # Second guard: the dispatcher survived (it self-stops on terminal, so allow
+    # either "still registered" or "cleanly gone" — never a crash mid-stream, which
+    # the missing-frames assertion above already rules out).
+    assert match?([{_pid, _}], Registry.lookup(server.push_registry, task_id)) or
+             Registry.lookup(server.push_registry, task_id) == []
   end
 
   test "inline config with an invalid url does not fail message/send", %{server: server} do
@@ -136,6 +163,14 @@ defmodule A2A.Server.PushDispatcherTest do
   defp collect_pushes(acc) do
     receive do
       {:push, _cfg, frame} -> collect_pushes([frame | acc])
+    after
+      500 -> Enum.reverse(acc)
+    end
+  end
+
+  defp collect_all_pushes(acc) do
+    receive do
+      {:push, _cfg, _frame} = msg -> collect_all_pushes([msg | acc])
     after
       500 -> Enum.reverse(acc)
     end
