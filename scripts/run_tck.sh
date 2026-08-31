@@ -36,4 +36,51 @@ log "Using TCK at: $TCK_DIR"
 log "SUT: $SUT_HOST"
 log "Reports: $REPORTS_DIR"
 
-# (server boot / readiness / run / teardown added in Task 3)
+# --- Boot the echo server in the background --------------------------------
+# `exec mix run` inside the subshell replaces it, so $! is the beam.smp PID.
+# beam puts itself in its own process group, so the negative-PID kill in
+# cleanup() takes the whole tree (incl. erl_child_setup) without touching us.
+SERVER_PID=""
+cleanup() {
+  if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
+    log "Stopping echo server (pid $SERVER_PID)"
+    kill -TERM "-$SERVER_PID" 2>/dev/null || kill -TERM "$SERVER_PID" 2>/dev/null || true
+    wait "$SERVER_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT INT TERM
+
+log "Booting echo server on port $SUT_PORT ..."
+( cd "$REPO_ROOT/examples/echo_server" && exec mix run --no-halt ) \
+  >/tmp/echo_server.log 2>&1 &
+SERVER_PID=$!
+kill -0 "$SERVER_PID" 2>/dev/null || die 3 "echo server process did not start (see /tmp/echo_server.log)"
+
+# --- Wait for readiness (poll the agent card) ------------------------------
+card_url="$SUT_HOST/.well-known/agent-card.json"
+log "Waiting up to ${READY_TIMEOUT}s for $card_url ..."
+ready=""
+for _ in $(seq 1 "$READY_TIMEOUT"); do
+  if curl -fsS -o /dev/null "$card_url" 2>/dev/null; then ready=1; break; fi
+  kill -0 "$SERVER_PID" 2>/dev/null || die 3 "echo server exited during startup (see /tmp/echo_server.log)"
+  sleep 1
+done
+[ -n "$ready" ] || die 4 "SUT never became ready at $card_url within ${READY_TIMEOUT}s"
+log "SUT is ready."
+
+# --- Run the TCK -----------------------------------------------------------
+mkdir -p "$REPORTS_DIR"
+log "Running TCK against $SUT_HOST ..."
+tck_status=0
+( cd "$TCK_DIR" && uv run ./run_tck.py --sut-host "$SUT_HOST" ) || tck_status=$?
+
+# --- Collect reports -------------------------------------------------------
+if [ -d "$TCK_DIR/reports" ]; then
+  cp -R "$TCK_DIR/reports/." "$REPORTS_DIR/" 2>/dev/null || true
+  log "Reports collected in $REPORTS_DIR"
+else
+  log "WARNING: TCK produced no reports/ directory"
+fi
+
+log "TCK exit status: $tck_status"
+exit "$tck_status"
