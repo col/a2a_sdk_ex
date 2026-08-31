@@ -17,6 +17,12 @@ defmodule A2A.Server.EventStream do
   It always unsubscribes on halt and demonitors if it monitored. Yields the
   **domain** envelope — no wire types here; the `StreamResponse` projection lives
   in the streaming consumer.
+
+  The `receive` **pins the task id**. A subscription is owned by a process mailbox,
+  not by a stream, and one process can legitimately hold more than one at a time (a
+  resubscribe stream plus a send, say) — so an envelope for another task must be
+  left in the mailbox for whoever it belongs to, not folded in here. Without the pin
+  a foreign terminal event both leaks its frames onto this stream and closes it.
   """
   alias A2A.Server.Events
   alias A2A.Server.Events.Event
@@ -29,7 +35,7 @@ defmodule A2A.Server.EventStream do
 
     Stream.resource(
       fn -> start(pubsub, task_id, monitor_pid, subscribe?) end,
-      fn acc -> next(acc, idle_timeout) end,
+      fn acc -> next(acc, task_id, idle_timeout) end,
       fn acc -> stop(pubsub, task_id, acc) end
     )
   end
@@ -41,11 +47,11 @@ defmodule A2A.Server.EventStream do
   end
 
   # After a terminal event was yielded, the next pull halts.
-  defp next(%{halted?: true} = acc, _timeout), do: {:halt, acc}
+  defp next(%{halted?: true} = acc, _task_id, _timeout), do: {:halt, acc}
 
-  defp next(%{ref: ref} = acc, timeout) do
+  defp next(%{ref: ref} = acc, task_id, timeout) do
     receive do
-      %Event{payload: payload} = e ->
+      %Event{task_id: ^task_id, payload: payload} = e ->
         if Events.final?(payload),
           do: {[e], %{acc | halted?: true}},
           else: {[e], acc}

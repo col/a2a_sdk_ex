@@ -2,17 +2,20 @@ defmodule A2A.Server.DefaultHandler do
   @moduledoc """
   Batteries-included `RequestHandler`. Implements the blocking `send_message/2` and
   `get_task/2` path, plus the streaming `send_message_stream/2` and `resubscribe/2`
-  path. The blocking path subscribes to the task topic *before* starting the execution
-  process, then folds the shared `A2A.Server.EventStream` through `ResultAssembler` to
-  the terminal (or `input_required`) frame. The streaming path subscribes eagerly and
-  returns a lazy `EventStream`-backed enumerable — see the enumeration contract noted
-  on `send_message_stream/2` and `resubscribe/2`.
+  path. The blocking path delegates to `A2A.Server.BlockingDrain`, which subscribes to
+  the task topic in its own process *before* the execution process starts, folds the
+  shared `A2A.Server.EventStream` through `ResultAssembler` to the terminal (or
+  interrupted) frame, and then exits — so events the executor emits after §3.2.2 ends
+  the wait cannot reach the caller. The streaming path subscribes eagerly, in the
+  caller — see the enumeration contract noted on `send_message_stream/2` and
+  `resubscribe/2`.
   """
   @behaviour A2A.Server.RequestHandler
 
   require Logger
 
   alias A2A.Server.{
+    BlockingDrain,
     Events,
     EventStream,
     Execution,
@@ -67,21 +70,17 @@ defmodule A2A.Server.DefaultHandler do
       seed = seed_task(existing, task_id, context_id, message)
       ctx = build_context(message, task_id, context_id, req)
       maybe_register_inline_push(server, task_id, req)
-      :ok = Events.subscribe(server.pubsub, task_id)
 
-      case start_execution(server, task_id, context_id, ctx, seed) do
-        {:ok, pid} ->
-          server
-          |> drain_stream(task_id, seed, pid, timeout)
+      case drain_blocking(server, task_id, context_id, ctx, seed, timeout) do
+        {:ok, drained} ->
+          drained
           |> then(&resolve_blocking(server, task_id, &1))
           |> then(&truncate_result(&1, req))
 
         {:error, {:already_started, _}} ->
-          Events.unsubscribe(server.pubsub, task_id)
           {:error, %A2A.Error{code: :task_in_progress, message: "task already running"}}
 
         {:error, reason} ->
-          Events.unsubscribe(server.pubsub, task_id)
           {:error, %A2A.Error{code: :internal_error, message: inspect(reason)}}
       end
     end
@@ -96,13 +95,21 @@ defmodule A2A.Server.DefaultHandler do
   defp missing_message,
     do: %A2A.Error{code: :invalid_params, message: "SendMessageRequest.message is required"}
 
-  # The drain folds events into its own projection, so it starts from the same
-  # seed the execution did — otherwise the task returned to a blocking caller
-  # would be missing the history and artifacts of every earlier turn.
-  defp drain_stream(server, task_id, seed, pid, timeout) do
-    server.pubsub
-    |> EventStream.stream(task_id, monitor: pid, idle_timeout: timeout, subscribe?: false)
-    |> Enum.reduce_while({:running, seed}, &fold_event/2)
+  # The drain runs in its OWN process (`A2A.Server.BlockingDrain`), which subscribes,
+  # hands back a `:ready` handshake so the execution still starts strictly after the
+  # subscription, folds, reports, and exits. Because §3.2.2 lets the fold stop while
+  # the executor keeps emitting, anything broadcast after the halt must land in a
+  # mailbox nobody reads again — a process that dies is the only way to guarantee it
+  # is never mistaken for the caller's next operation.
+  defp drain_blocking(server, task_id, context_id, ctx, seed, timeout) do
+    BlockingDrain.run(
+      pubsub: server.pubsub,
+      task_id: task_id,
+      seed: {:running, seed},
+      idle_timeout: timeout,
+      start: fn -> start_execution(server, task_id, context_id, ctx, seed) end,
+      fold: &fold_event/2
+    )
   end
 
   # A bare `Message` payload is a direct reply (spec 3.1.1): no task was created,
