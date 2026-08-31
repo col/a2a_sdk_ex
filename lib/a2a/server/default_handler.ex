@@ -217,6 +217,12 @@ defmodule A2A.Server.DefaultHandler do
     end
   end
 
+  # No execution lookup: the PubSub topic is keyed by task id and outlives any
+  # single turn, so a task parked between turns gets a live stream like any other.
+  # Subscribing BEFORE the store read (in `resubscribe/2`) also closes the old
+  # settle-in-the-gap window — a task that terminates after the snapshot delivers
+  # its terminal event on this stream instead of being dropped by an unsubscribe.
+  #
   # Spec 3.1.6: SubscribeToTask "returns UnsupportedOperationError if the task is
   # in a terminal state". A snapshot-only stream is not a substitute — the
   # subscriber cannot distinguish it from a task that is merely quiet.
@@ -233,39 +239,15 @@ defmodule A2A.Server.DefaultHandler do
          }}
 
       false ->
-        {snapshot_task, live} = resubscribe_attach(server, task_id, task)
-        {:ok, Stream.concat([StreamResponse.task(snapshot_task)], live)}
-    end
-  end
-
-  defp resubscribe_attach(server, task_id, task) do
-    case Registry.lookup(server.registry, task_id) do
-      [{pid, _}] ->
-        live_stream =
+        live =
           server.pubsub
-          |> EventStream.stream(task_id, monitor: pid, idle_timeout: :infinity, subscribe?: false)
+          |> EventStream.stream(task_id,
+            idle_timeout: server.stream_idle_timeout,
+            subscribe?: false
+          )
           |> Stream.map(&StreamFrame.of(&1.payload))
 
-        {task, live_stream}
-
-      [] ->
-        # No live execution now — but `task` was read BEFORE this lookup, so if the
-        # execution settled in that gap, Registry.lookup/2 returns `[]` (process
-        # exited) while `task` is the STALE pre-terminal snapshot — and the terminal
-        # event already buffered in this process's mailbox is about to be discarded
-        # by unsubscribe below. Re-read the store: the process can only have exited
-        # (making the lookup return `[]`) AFTER persisting its terminal state, so this
-        # fresh read is terminal by construction and closes the settle-between-read-
-        # and-lookup window. Fall back to the original snapshot if the fresh read
-        # somehow misses (shouldn't happen — the task existed a moment ago).
-        fresh_task =
-          case server.store.get(task_id, server.scope) do
-            {:ok, %Task{} = fresh} -> fresh
-            {:error, :not_found} -> task
-          end
-
-        Events.unsubscribe(server.pubsub, task_id)
-        {fresh_task, []}
+        {:ok, Stream.concat([StreamResponse.task(task)], live)}
     end
   end
 

@@ -169,6 +169,54 @@ defmodule A2A.Server.StreamingTest do
     assert_receive {:frames, _}, 1000
   end
 
+  test "resubscribe to a parked task streams the NEXT turn's frames through terminal",
+       %{server: server} do
+    # TCK STREAM-SUB-002 (spec §3.1.6): the stream "MUST terminate when the task
+    # reaches a terminal state". Turn one parks at `input_required` and its
+    # execution process EXITS — so there is no live execution to attach to when
+    # the subscription opens. The stream must still be live, and must carry the
+    # follow-up turn's completion.
+    parked = %{server | executor: A2A.Test.InputRequiredExecutor, id_generator: fn -> "sub1" end}
+
+    assert {:ok, %A2A.Types.Task{id: "sub1", status: %{state: :input_required}}} =
+             DefaultHandler.send_message(parked, req("turn one"))
+
+    # The blocking send returned on the input_required *event*; the execution
+    # process exits a moment later. Wait for it, so this really is the "no live
+    # execution" case the TCK exercises — and so turn two is not rejected as
+    # :task_in_progress.
+    Wait.for_no_execution(server, "sub1")
+    assert Registry.lookup(server.registry, "sub1") == []
+
+    # Subscribe in THIS process — the stream is bound to the subscriber's mailbox.
+    {:ok, stream} =
+      DefaultHandler.resubscribe(server, %A2A.Types.SubscribeToTaskRequest{id: "sub1"})
+
+    caller = self()
+
+    spawn_link(fn ->
+      send(
+        caller,
+        {:turn_two, DefaultHandler.send_message(server, req("turn two", task_id: "sub1"))}
+      )
+    end)
+
+    frames = Enum.to_list(stream)
+
+    # §3.1.6: a Task snapshot first, then live frames, terminal last.
+    assert [
+             %A2A.Types.StreamResponse{kind: :task, task: %{status: %{state: :input_required}}}
+             | rest
+           ] =
+             frames
+
+    assert rest != []
+    last = List.last(frames)
+    assert %A2A.Types.StreamResponse{kind: :status_update} = last
+    assert last.status_update.status.state == :completed
+    assert_receive {:turn_two, {:ok, _}}, 2000
+  end
+
   defp wait_for_task(server, id, tries \\ 50) do
     case server.store.get(id, server.scope) do
       {:ok, _} ->
