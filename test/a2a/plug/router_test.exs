@@ -52,11 +52,11 @@ defmodule A2A.Plug.RouterTest do
     assert conn.status == 404
   end
 
-  test "POST message/send echoes into a completed task", %{opts: opts} do
+  test "POST SendMessage echoes into a completed task", %{opts: opts} do
     body = %{
       "jsonrpc" => "2.0",
       "id" => 1,
-      "method" => "message/send",
+      "method" => "SendMessage",
       "params" =>
         A2A.JSON.to_json_map(%SendMessageRequest{
           message: %Message{message_id: "m1", role: :user, parts: [Part.text("hi")]}

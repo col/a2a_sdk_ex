@@ -18,12 +18,12 @@ running tasks.**
 - **Hot state** — a running task's live status, in-flight artifacts, current
   history — lives in its [execution process](process-model.md). It is fast,
   serialized by the process mailbox, and never contended.
-- **Cold state** — the durable record used for `tasks/get`, `tasks/list`,
+- **Cold state** — the durable record used for `GetTask`, `ListTasks`,
   resubscription catch-up, and recovery after a node restart — lives in the
   `TaskStore`. The execution process writes through to it as events are emitted.
 
 So the store is updated *from* the event stream; it is the persistent shadow of
-what the process already knows. `tasks/get` for a *running* task can be served
+what the process already knows. `GetTask` for a *running* task can be served
 from either (they agree); for a *finished* task it comes from the store.
 
 This split means the store's job is simpler than in Python/JS: it is not a

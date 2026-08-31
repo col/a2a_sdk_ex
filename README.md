@@ -10,8 +10,8 @@ architectural seams — but designed for the Elixir/OTP ecosystem rather than
 ported line-by-line.
 
 > **Status:** the typed foundation, the server-core runtime — blocking
-> `message/send`, streaming `message/stream` and `tasks/resubscribe`, plus
-> `tasks/cancel` and `tasks/list` (shared `EventStream`, configurable drain
+> `SendMessage`, streaming `SendStreamingMessage` and `SubscribeToTask`, plus
+> `CancelTask` and `ListTasks` (shared `EventStream`, configurable drain
 > timeout) over the OTP process model — and both HTTP transports, JSON-RPC and
 > REST (`A2A.Plug.Router`/`A2A.Plug.JSONRPC`/`A2A.Plug.REST`/`A2A.Plug.SSE`,
 > optional `A2A.Standalone`), plus opt-in **push notifications** (config CRUD
@@ -29,7 +29,7 @@ Both HTTP bindings are mounted by [`examples/echo_server/`](examples/echo_server
 curl -s http://localhost:5001/ \
   -H 'content-type: application/json' \
   -d '{
-    "jsonrpc": "2.0", "id": 1, "method": "message/send",
+    "jsonrpc": "2.0", "id": 1, "method": "SendMessage",
     "params": {"message": {"messageId": "m1", "role": "ROLE_USER",
       "parts": [{"text": "hello"}]}}
   }' | jq
@@ -58,7 +58,7 @@ walkthrough (agent card, streaming over both bindings).
 
 Enable delivery with `push_notifications: true` on `A2A.Server.Supervisor`,
 then register a webhook for a task (also settable inline via
-`SendMessageConfiguration.task_push_notification_config` on `message/send`):
+`SendMessageConfiguration.task_push_notification_config` on `SendMessage`):
 
 ```bash
 curl -s -X POST http://localhost:5001/tasks/<task-id>/pushNotificationConfigs \

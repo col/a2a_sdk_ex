@@ -27,7 +27,7 @@ defmodule A2A.Server.PushE2ETest do
     %{server: A2A.Server.handle(name)}
   end
 
-  test "message/send with inline config delivers real webhooks ending in completed", %{
+  test "SendMessage with inline config delivers real webhooks ending in completed", %{
     server: server
   } do
     {base, srv} = WebhookReceiver.start(self())

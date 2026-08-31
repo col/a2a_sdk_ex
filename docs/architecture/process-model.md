@@ -45,7 +45,7 @@ A2A.Supervisor
 
 ## The execution process
 
-When the request handler accepts a `message/send` that starts work, it starts a
+When the request handler accepts a `SendMessage` that starts work, it starts a
 **single process for that `task_id`** under the `DynamicSupervisor` and registers
 it. The agent author's `AgentExecutor.execute/2` runs under that process.
 
@@ -75,7 +75,7 @@ execution process ──broadcast──▶  "a2a:task:<task_id>"  (PubSub topic)
 ```
 
 Any number of consumers subscribe to the topic. The SSE handler,
-`tasks/resubscribe`, and the per-task `A2A.Server.PushDispatcher` (started
+`SubscribeToTask`, and the per-task `A2A.Server.PushDispatcher` (started
 lazily the first time a config is registered for that task — see
 [ADR-0012](decisions/0012-push-notifications.md)) are all *just subscribers*
 — none is privileged, none can write task state, and none blocks the executor.
@@ -88,7 +88,7 @@ task's dispatcher, never the executor or another task's delivery.
 ## Lifecycle & state transitions
 
 ```
-        message/send (new)
+        SendMessage (new)
               │
               ▼
         ┌───────────┐   executor emits
@@ -103,7 +103,7 @@ task's dispatcher, never the executor or another task's delivery.
            │ input_required │   │        │ auth_required │  (stream stays open)
            └───────┬────────┘   │        └──────┬────────┘
        resume via  │            │   resume via  │
-       message/send│            ▼               │ out-of-band creds
+        SendMessage│            ▼               │ out-of-band creds
                    └──▶ ┌──────────────────────────────┐
                         │ completed / failed / canceled│  (terminal, immutable)
                         │ / rejected                    │
@@ -111,7 +111,7 @@ task's dispatcher, never the executor or another task's delivery.
 ```
 
 - **`input_required`** ends the current stream; the client resumes by sending
-  another `message/send` for the same task.
+  another `SendMessage` for the same task.
 - **`auth_required`** is special: it does **not** end the stream (matching the JS
   SDK), because the executor may resume after credentials are injected
   out-of-band. See invariant 6 in the [top-level doc](../architecture.md).
@@ -120,7 +120,7 @@ task's dispatcher, never the executor or another task's delivery.
 
 ## Cancellation
 
-`tasks/cancel` looks the task up in the `Registry` and sends the execution
+`CancelTask` looks the task up in the `Registry` and sends the execution
 process a cancel message. The process invokes the executor's `cancel/2`
 callback, lets it publish a final `:canceled` status, and exits. There is no
 `asyncio.CancelledError`-style injection to reproduce; cancellation is an
@@ -139,7 +139,7 @@ another: isolation is per-process by construction.
 
 Live execution state is in-process and does not survive a node restart — but the
 `TaskStore` holds the durable projection, so task **history and terminal
-results** survive. A restarted node serves `tasks/get` from the store; a task
+results** survive. A restarted node serves `GetTask` from the store; a task
 that was mid-flight when the node died is observable as its last persisted state.
 The hot/cold split is detailed in [Persistence](persistence.md).
 

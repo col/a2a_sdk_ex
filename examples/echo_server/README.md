@@ -27,7 +27,7 @@ Send a message (blocking):
 curl -s http://localhost:5001/ \
   -H 'content-type: application/json' \
   -d '{
-    "jsonrpc": "2.0", "id": 1, "method": "message/send",
+    "jsonrpc": "2.0", "id": 1, "method": "SendMessage",
     "params": {"message": {"messageId": "m1", "role": "ROLE_USER",
       "parts": [{"text": "hello"}]}}
   }' | jq
@@ -41,7 +41,7 @@ Stream the same request (Server-Sent Events):
 curl -N http://localhost:5001/ \
   -H 'content-type: application/json' \
   -d '{
-    "jsonrpc": "2.0", "id": 2, "method": "message/stream",
+    "jsonrpc": "2.0", "id": 2, "method": "SendStreamingMessage",
     "params": {"message": {"messageId": "m2", "role": "ROLE_USER",
       "parts": [{"text": "hello"}]}}
   }'

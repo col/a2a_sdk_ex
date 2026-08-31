@@ -99,16 +99,16 @@ this is the boundary that keeps agent logic written once (see
 
 | Callback | A2A method |
 | --- | --- |
-| `send_message/2` | `message/send` (blocking or non-blocking) |
-| `send_message_stream/2` | `message/stream` (SSE) |
-| `get_task/2` | `tasks/get` |
-| `cancel_task/2` | `tasks/cancel` |
-| `resubscribe/2` | `tasks/resubscribe` (SSE) |
-| `list_tasks/2` | `tasks/list` |
-| `create_push_config/2` | `tasks/pushNotificationConfig/set` |
-| `get_push_config/2` | `tasks/pushNotificationConfig/get` |
-| `list_push_configs/2` | `tasks/pushNotificationConfig/list` |
-| `delete_push_config/2` | `tasks/pushNotificationConfig/delete` |
+| `send_message/2` | `SendMessage` (blocking or non-blocking) |
+| `send_message_stream/2` | `SendStreamingMessage` (SSE) |
+| `get_task/2` | `GetTask` |
+| `cancel_task/2` | `CancelTask` |
+| `resubscribe/2` | `SubscribeToTask` (SSE) |
+| `list_tasks/2` | `ListTasks` |
+| `create_push_config/2` | `CreateTaskPushNotificationConfig` |
+| `get_push_config/2` | `GetTaskPushNotificationConfig` |
+| `list_push_configs/2` | `ListTaskPushNotificationConfigs` |
+| `delete_push_config/2` | `DeleteTaskPushNotificationConfig` |
 | `agent_card/1` | `.well-known/agent-card.json` |
 
 `A2A.Server.DefaultHandler` is the batteries-included implementation. It is
@@ -131,7 +131,7 @@ responsibilities:
    return a snapshot immediately while draining continues in the background
    (matches the JS SDK).
 5. **Non-blocking (polling):** return on the first `task`/`message` event; the
-   client polls `tasks/get` or attaches later via `resubscribe`.
+   client polls `GetTask` or attaches later via `resubscribe`.
 
 ### `drain_timeout`: blocking-only, SDK-side
 
@@ -217,7 +217,7 @@ receive the cancel call while `execute/2` is in flight).
 
 `create_push_config/2`, `get_push_config/2`, `list_push_configs/2`, and
 `delete_push_config/2` are the CRUD surface for `A2A.Server.PushConfigStore`
-(spec `tasks/pushNotificationConfig/*`), backing both the JSON-RPC methods and
+(spec `*TaskPushNotificationConfig`), backing both the JSON-RPC methods and
 the REST `/tasks/{task_id}/pushNotificationConfigs…` routes (see
 [Transports](transports.md)). Each call first checks
 `ensure_push_enabled/1` — if the server wasn't started with
@@ -228,7 +228,7 @@ caller omits one, persists via `PushConfigStore.put/2`, and ensures a
 per-task `A2A.Server.PushDispatcher` is running
 (`PushDispatcher.Supervisor.ensure_started/2`) before returning. The same
 registration path runs **inline** when `SendMessageConfiguration` on a
-`message/send` carries a `task_push_notification_config` — an invalid inline
+`SendMessage` carries a `task_push_notification_config` — an invalid inline
 webhook URL is swallowed (the send still proceeds) rather than failing the
 call, unlike the CRUD path which validates strictly. Delivery itself —
 subscribing to the task's event topic and POSTing each event as a webhook —

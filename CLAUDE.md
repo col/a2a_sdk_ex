@@ -39,8 +39,8 @@ decode/dispatch) + `A2A.Plug.REST` (REST transport mechanics — path/query/body
 `A2A.Plug.SSE` (streaming responses, shared by both bindings via a
 frame-formatter argument), plus an optional `A2A.Standalone` (Bandit-backed)
 for running without a host web framework. All six operations are wired on
-both bindings — `message/send`, `message/stream`, `tasks/get`,
-`tasks/cancel`, `tasks/list`, `tasks/resubscribe` — rendered via
+both bindings — `SendMessage`, `SendStreamingMessage`, `GetTask`,
+`CancelTask`, `ListTasks`, `SubscribeToTask` — rendered via
 `A2A.Error.to_jsonrpc/1` (JSON-RPC) or `A2A.Error.to_rest/1` (REST,
 `google.rpc.Status` body), two projections of one error-code table. `plug` is
 now a **hard** runtime dep; `bandit` is optional (only needed for
@@ -61,7 +61,7 @@ path and the dispatcher. Delivery is **best-effort per task**: events to a
 task's registered webhooks are delivered concurrently but barriered per event
 (ordering), failures are logged and dropped (never raised, never retried),
 and a hung sender is bounded by `push_timeout`. JSON-RPC
-(`tasks/pushNotificationConfig/{set,get,list,delete}`) and REST
+(`{Create,Get,List,Delete}TaskPushNotificationConfig`) and REST
 (`/tasks/{task_id}/pushNotificationConfigs[/{id}]`) both land on the four
 `DefaultHandler` push callbacks, gated by the `:push_notification_not_supported`
 `A2A.Error` when the server wasn't started with push enabled. A host must separately set
@@ -94,7 +94,7 @@ harness exists to track the gap, not gate on it.
   `PushDispatcher` starts lazily on first config registration for a task; it is
   best-effort and forward-only, not a replay log — a config registered mid-task
   does not retroactively receive earlier events. A receiver that needs the full
-  history reconciles via `tasks/get`.
+  history reconciles via `GetTask`.
 - **Streaming enumerables must be enumerated once, in the calling process.**
   `send_message_stream/2` and `resubscribe/2` subscribe eagerly (in the caller)
   then return a lazy stream whose `receive` runs at enumeration time — enumerate

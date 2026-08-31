@@ -22,7 +22,7 @@ defmodule A2A.Plug.JSONRPCPushTest do
 
   test "set → get → list → delete round-trip over JSON-RPC", %{server: server} do
     {:reply, set_env} =
-      call(server, "tasks/pushNotificationConfig/set", %{
+      call(server, "CreateTaskPushNotificationConfig", %{
         "taskId" => "t1",
         "url" => "https://h/cb"
       })
@@ -31,17 +31,17 @@ defmodule A2A.Plug.JSONRPCPushTest do
     assert is_binary(id) and id != ""
 
     assert {:reply, get_env} =
-             call(server, "tasks/pushNotificationConfig/get", %{"taskId" => "t1", "id" => id})
+             call(server, "GetTaskPushNotificationConfig", %{"taskId" => "t1", "id" => id})
 
     assert get_env["result"]["url"] == "https://h/cb"
 
     assert {:reply, list_env} =
-             call(server, "tasks/pushNotificationConfig/list", %{"taskId" => "t1"})
+             call(server, "ListTaskPushNotificationConfigs", %{"taskId" => "t1"})
 
     assert length(list_env["result"]["configs"]) == 1
 
     assert {:reply, del_env} =
-             call(server, "tasks/pushNotificationConfig/delete", %{"taskId" => "t1", "id" => id})
+             call(server, "DeleteTaskPushNotificationConfig", %{"taskId" => "t1", "id" => id})
 
     assert del_env["result"] == nil
   end
@@ -53,7 +53,7 @@ defmodule A2A.Plug.JSONRPCPushTest do
     disabled = %{server | push_notifications: false, push_store: nil}
 
     assert {:error, env} =
-             call(disabled, "tasks/pushNotificationConfig/set", %{
+             call(disabled, "CreateTaskPushNotificationConfig", %{
                "taskId" => "t1",
                "url" => "https://h/cb"
              })
