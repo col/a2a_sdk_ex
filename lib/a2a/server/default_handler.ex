@@ -70,6 +70,7 @@ defmodule A2A.Server.DefaultHandler do
       seed = seed_task(existing, task_id, context_id, message)
       ctx = build_context(message, task_id, context_id, req)
       maybe_register_inline_push(server, task_id, req)
+      ensure_dispatcher_for_configured(server, task_id)
 
       case drain_blocking(server, task_id, context_id, ctx, seed, timeout) do
         {:ok, drained} ->
@@ -168,6 +169,7 @@ defmodule A2A.Server.DefaultHandler do
       seed = seed_task(existing, task_id, context_id, message)
       ctx = build_context(message, task_id, context_id, req)
       maybe_register_inline_push(server, task_id, req)
+      ensure_dispatcher_for_configured(server, task_id)
       :ok = Events.subscribe(server.pubsub, task_id)
 
       case start_execution(server, task_id, context_id, ctx, seed) do
@@ -305,6 +307,7 @@ defmodule A2A.Server.DefaultHandler do
               task: task
             )
 
+          ensure_dispatcher_for_configured(server, id)
           updater = TaskUpdater.update_status(updater, :canceled)
           {:ok, updater.task}
         end
@@ -621,6 +624,30 @@ defmodule A2A.Server.DefaultHandler do
 
       :ok
   end
+
+  # A dispatcher is reaped after `push_idle_timeout` of silence on an unworked task,
+  # so by the time a later turn (or a cancel) broadcasts, there may be no subscriber
+  # left even though the config is still registered and the client still believes it
+  # is subscribed. Revive one before anything is broadcast. `ensure_started/2`
+  # subscribes synchronously inside `init/1`, so calling this BEFORE the execution
+  # starts is what guarantees the subscription is live for the turn's first event.
+  # Costs one store read per send on a push-enabled server, and nothing at all when
+  # push is off or the task has no webhooks.
+  defp ensure_dispatcher_for_configured(%A2A.Server{push_notifications: true} = server, task_id) do
+    case server.push_store.list(task_id, server.scope) do
+      {:ok, [_ | _]} -> ensure_dispatcher(server, task_id)
+      _ -> :ok
+    end
+  rescue
+    # This read sits on the hot path of every send once push is enabled, so a host
+    # store that raises must cost push delivery, not the whole SendMessage — the
+    # same best-effort contract `best_effort_put/2` gives the inline path.
+    e ->
+      Logger.warning("push dispatcher revival failed task_id=#{task_id}: #{inspect(e)}")
+      :ok
+  end
+
+  defp ensure_dispatcher_for_configured(%A2A.Server{}, _task_id), do: :ok
 
   # Best-effort dispatcher start: a failure to start the delivery process must not
   # fail config creation (config is persisted) nor the SendMessage (inline path).

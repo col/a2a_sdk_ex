@@ -69,6 +69,25 @@ defmodule A2A.Test.AuthThenInputExecutor do
   def cancel(_ctx, _updater), do: :ok
 end
 
+defmodule A2A.Test.SlowCompleteExecutor do
+  @moduledoc "Emits `working`, then works silently for 300ms before completing — a task whose only quiet gap is the agent thinking."
+  @behaviour A2A.Server.AgentExecutor
+  alias A2A.Server.TaskUpdater
+  alias A2A.Types.Part
+
+  @impl true
+  def execute(_ctx, updater) do
+    u = TaskUpdater.start_work(updater)
+    Process.sleep(300)
+    TaskUpdater.complete(u, Part.text("done"))
+
+    :ok
+  end
+
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+end
+
 defmodule A2A.Test.InputRequiredExecutor do
   @moduledoc "Parks at input_required — the resumable shape a multi-turn exchange starts from."
   @behaviour A2A.Server.AgentExecutor

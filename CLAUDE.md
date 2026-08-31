@@ -130,6 +130,14 @@ track the gap, not gate on it.
   best-effort and forward-only, not a replay log — a config registered mid-task
   does not retroactively receive earlier events. A receiver that needs the full
   history reconciles via `GetTask`.
+- **A dispatcher is reaped only when nobody is working on the task.**
+  `push_idle_timeout` (default 60s) collects dispatchers for abandoned tasks, but
+  `handle_info(:timeout, …)` re-checks the execution `Registry` first, so an agent
+  that works silently for longer than the timeout keeps its dispatcher — otherwise
+  a slow single-turn task would lose the very terminal event the webhook exists
+  for. `DefaultHandler` revives a reaped dispatcher before a later turn or a
+  `cancel_task/2` broadcasts, so delivery cannot stop silently while the config is
+  still registered.
 - **Streaming enumerables must be enumerated once, in the calling process.**
   `send_message_stream/2` and `resubscribe/2` subscribe eagerly (in the caller)
   then return a lazy stream whose `receive` runs at enumeration time — enumerate

@@ -14,6 +14,10 @@ defmodule A2A.Server.Supervisor do
       would otherwise hold its request process indefinitely — `A2A.Plug.SSE` can
       only notice a client disconnect when it next tries to write a chunk. The
       timeout fires only on total silence, so it never truncates a live stream.
+    * `:push_idle_timeout` (default `60_000`) — how long a task's `PushDispatcher`
+      survives with no events **and no execution running**. It garbage-collects
+      dispatchers for abandoned tasks; a task being worked on is never reaped,
+      however silent, and a reaped one is revived before a later turn broadcasts.
   """
   use Supervisor
 
@@ -54,6 +58,7 @@ defmodule A2A.Server.Supervisor do
       push_store: if(push?, do: Keyword.get(opts, :push_store, A2A.Server.PushConfigStore.ETS)),
       push_sender: if(push?, do: Keyword.get(opts, :push_sender, A2A.Server.PushSender.Default)),
       push_timeout: Keyword.get(opts, :push_timeout, 5_000),
+      push_idle_timeout: Keyword.get(opts, :push_idle_timeout, 60_000),
       push_url_validator:
         if(push?,
           do: Keyword.get(opts, :push_url_validator, PushSender.default_url_validator())
