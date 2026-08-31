@@ -23,8 +23,10 @@ defmodule A2A.Server.StreamingPropertyTest do
       A2A.Server.Supervisor,
       # `valid_event_script/0` can end on `input_required`, which (correctly,
       # per §3.1.2) does not close the stream — only a short idle timeout does,
-      # since nothing further is ever emitted after the script runs out.
-      name: name, executor: ReplayExecutor, pubsub: pubsub, stream_idle_timeout: 100
+      # since nothing further is ever emitted after the script runs out. Matches
+      # the sibling "wait for silence" timeouts (150ms/250ms) used elsewhere in
+      # this commit, rather than a tighter value with no margin of its own.
+      name: name, executor: ReplayExecutor, pubsub: pubsub, stream_idle_timeout: 250
     })
 
     %{server: A2A.Server.handle(name)}
