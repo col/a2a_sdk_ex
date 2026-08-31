@@ -11,3 +11,6 @@ a2a-*.tar
 # Superpowers plan docs are working artifacts — not committed.
 # (Spec docs, architecture docs, and ADRs under docs/ ARE committed.)
 /docs/superpowers/plans/
+
+# TCK compliance report output (regenerated each run).
+/reports/
