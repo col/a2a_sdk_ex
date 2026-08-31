@@ -9,11 +9,15 @@ defmodule A2A.Plug.JSONRPC do
 
   alias A2A.Types.{
     CancelTaskRequest,
+    DeleteTaskPushNotificationConfigRequest,
+    GetTaskPushNotificationConfigRequest,
     GetTaskRequest,
+    ListTaskPushNotificationConfigsRequest,
     ListTasksRequest,
     SendMessageRequest,
     SendMessageResponse,
-    SubscribeToTaskRequest
+    SubscribeToTaskRequest,
+    TaskPushNotificationConfig
   }
 
   alias A2A.Types.Task
@@ -27,7 +31,11 @@ defmodule A2A.Plug.JSONRPC do
     "tasks/get" => {GetTaskRequest, :unary},
     "tasks/resubscribe" => {SubscribeToTaskRequest, :stream},
     "tasks/cancel" => {CancelTaskRequest, :unary},
-    "tasks/list" => {ListTasksRequest, :unary}
+    "tasks/list" => {ListTasksRequest, :unary},
+    "tasks/pushNotificationConfig/set" => {TaskPushNotificationConfig, :unary},
+    "tasks/pushNotificationConfig/get" => {GetTaskPushNotificationConfigRequest, :unary},
+    "tasks/pushNotificationConfig/list" => {ListTaskPushNotificationConfigsRequest, :unary},
+    "tasks/pushNotificationConfig/delete" => {DeleteTaskPushNotificationConfigRequest, :unary}
   }
 
   @spec decode_envelope(binary()) :: {:ok, envelope()} | {:error, map()}
@@ -91,6 +99,34 @@ defmodule A2A.Plug.JSONRPC do
   defp call(server, id, :unary, %ListTasksRequest{} = req) do
     case DefaultHandler.list_tasks(server, req) do
       {:ok, resp} -> {:reply, result_envelope(id, resp)}
+      {:error, err} -> {:error, error_from(id, err)}
+    end
+  end
+
+  defp call(server, id, :unary, %TaskPushNotificationConfig{} = req) do
+    case DefaultHandler.create_push_config(server, req) do
+      {:ok, cfg} -> {:reply, result_envelope(id, cfg)}
+      {:error, err} -> {:error, error_from(id, err)}
+    end
+  end
+
+  defp call(server, id, :unary, %GetTaskPushNotificationConfigRequest{} = req) do
+    case DefaultHandler.get_push_config(server, req) do
+      {:ok, cfg} -> {:reply, result_envelope(id, cfg)}
+      {:error, err} -> {:error, error_from(id, err)}
+    end
+  end
+
+  defp call(server, id, :unary, %ListTaskPushNotificationConfigsRequest{} = req) do
+    case DefaultHandler.list_push_configs(server, req) do
+      {:ok, resp} -> {:reply, result_envelope(id, resp)}
+      {:error, err} -> {:error, error_from(id, err)}
+    end
+  end
+
+  defp call(server, id, :unary, %DeleteTaskPushNotificationConfigRequest{} = req) do
+    case DefaultHandler.delete_push_config(server, req) do
+      {:ok, :deleted} -> {:reply, %{"jsonrpc" => "2.0", "id" => id, "result" => nil}}
       {:error, err} -> {:error, error_from(id, err)}
     end
   end
