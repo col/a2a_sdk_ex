@@ -32,6 +32,7 @@ defmodule A2A.Server.TaskUpdaterTest do
     assert_receive %Event{payload: p2}
     assert {:ok, _} = json_roundtrip(p2)
     assert_receive %Event{payload: p3}
+    assert Events.final?(p3)
     assert {:ok, _} = json_roundtrip(p3)
     assert {:ok, %{status: %{state: :completed}}} = TaskStore.ETS.get("t-1", A2A.Scope.default())
   end
