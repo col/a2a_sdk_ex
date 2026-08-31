@@ -12,7 +12,8 @@ defmodule EchoServer.AgentCard do
       default_output_modes: ["text/plain"],
       capabilities: %AgentCapabilities{streaming: true},
       supported_interfaces: [
-        %AgentInterface{url: base_url, protocol_binding: "JSONRPC", protocol_version: "1.0"}
+        %AgentInterface{url: base_url, protocol_binding: "JSONRPC", protocol_version: "1.0"},
+        %AgentInterface{url: base_url, protocol_binding: "HTTP+JSON", protocol_version: "1.0"}
       ],
       skills: [
         %AgentSkill{
