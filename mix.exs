@@ -18,9 +18,12 @@ defmodule A2A.MixProject do
       description: "Elixir SDK for building A2A (Agent2Agent) compliant agents.",
       package: package(),
       docs: docs(),
-      test_coverage: [tool: ExUnit],
-      preferred_cli_env: ["test.proto": :test, precommit: :test]
+      test_coverage: [tool: ExUnit]
     ]
+  end
+
+  def cli do
+    [preferred_envs: ["test.proto": :test, precommit: :test]]
   end
 
   def application, do: [extra_applications: [:logger]]
