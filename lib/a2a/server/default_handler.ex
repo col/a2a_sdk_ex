@@ -10,11 +10,14 @@ defmodule A2A.Server.DefaultHandler do
   """
   @behaviour A2A.Server.RequestHandler
 
-  alias A2A.Server.{Events, EventStream, Execution, RequestContext, ResultAssembler}
+  alias A2A.Server.{Events, EventStream, Execution, RequestContext, ResultAssembler, TaskUpdater}
   alias A2A.Server.Events.Event
 
   alias A2A.Types.{
+    CancelTaskRequest,
     GetTaskRequest,
+    ListTasksRequest,
+    ListTasksResponse,
     Message,
     SendMessageRequest,
     StreamResponse,
@@ -23,6 +26,10 @@ defmodule A2A.Server.DefaultHandler do
     TaskArtifactUpdateEvent,
     TaskStatusUpdateEvent
   }
+
+  @epoch DateTime.from_unix!(0)
+  @default_page_size 50
+  @max_page_size 100
 
   @impl true
   @spec send_message(A2A.Server.t(), SendMessageRequest.t(), keyword()) ::
@@ -189,6 +196,53 @@ defmodule A2A.Server.DefaultHandler do
     end
   end
 
+  @impl true
+  @spec cancel_task(A2A.Server.t(), CancelTaskRequest.t()) ::
+          {:ok, Task.t()} | {:error, A2A.Error.t()}
+  def cancel_task(%A2A.Server{} = server, %CancelTaskRequest{id: id}) do
+    case Registry.lookup(server.registry, id) do
+      [{pid, _}] ->
+        try do
+          GenServer.call(pid, :cancel)
+        catch
+          # Process finished in the race window (completed/stopped before we called).
+          # Only "process is gone" exits fall back; a genuine call timeout (a still-
+          # running cancel) or any other exit propagates rather than double-writing.
+          :exit, {:noproc, _} -> cancel_not_live(server, id)
+          :exit, {:normal, _} -> cancel_not_live(server, id)
+        end
+
+      [] ->
+        cancel_not_live(server, id)
+    end
+  end
+
+  # No live execution: terminal -> not_cancelable; non-terminal persisted -> settle
+  # :canceled in the store (+ broadcast) so a late resubscriber sees it; missing ->
+  # not_found.
+  defp cancel_not_live(server, id) do
+    case server.store.get(id, server.scope) do
+      {:ok, %Task{} = task} ->
+        if ResultAssembler.terminal?(task) do
+          {:error, A2A.Error.not_cancelable(id)}
+        else
+          updater =
+            TaskUpdater.new(id, task.context_id,
+              pubsub: server.pubsub,
+              store: server.store,
+              scope: server.scope,
+              task: task
+            )
+
+          updater = TaskUpdater.update_status(updater, :canceled)
+          {:ok, updater.task}
+        end
+
+      {:error, :not_found} ->
+        {:error, A2A.Error.not_found(id)}
+    end
+  end
+
   defp reject_terminal(server, task_id) do
     case server.store.get(task_id, server.scope) do
       {:ok, task} ->
@@ -242,4 +296,105 @@ defmodule A2A.Server.DefaultHandler do
         {:error, %A2A.Error{code: :timeout, message: "timed out draining task events"}}
     end
   end
+
+  @impl true
+  @spec list_tasks(A2A.Server.t(), A2A.Types.ListTasksRequest.t()) ::
+          {:ok, A2A.Types.ListTasksResponse.t()} | {:error, A2A.Error.t()}
+  def list_tasks(%A2A.Server{} = server, %ListTasksRequest{} = req) do
+    case decode_cursor(req.page_token) do
+      {:ok, cursor} -> do_list_tasks(server, req, cursor)
+      {:error, %A2A.Error{}} = error -> error
+    end
+  end
+
+  defp do_list_tasks(server, req, cursor) do
+    filter = %{
+      context_id: req.context_id,
+      status: req.status,
+      status_timestamp_after: req.status_timestamp_after
+    }
+
+    {:ok, all} = server.store.list(filter, server.scope)
+    sorted = Enum.sort(all, &sort_desc/2)
+    total = length(sorted)
+    page_size = clamp_page_size(req.page_size)
+
+    remaining = after_cursor(sorted, cursor)
+    page = Enum.take(remaining, page_size)
+
+    next =
+      if length(remaining) > page_size,
+        do: page |> List.last() |> cursor_of(),
+        else: ""
+
+    tasks = Enum.map(page, &post_process(&1, req))
+
+    {:ok,
+     %ListTasksResponse{
+       tasks: tasks,
+       next_page_token: next,
+       page_size: page_size,
+       total_size: total
+     }}
+  end
+
+  defp clamp_page_size(nil), do: @default_page_size
+  defp clamp_page_size(n) when n < 1, do: 1
+  defp clamp_page_size(n) when n > @max_page_size, do: @max_page_size
+  defp clamp_page_size(n), do: n
+
+  defp ts_of(%Task{status: %{timestamp: nil}}), do: @epoch
+  defp ts_of(%Task{status: %{timestamp: ts}}), do: ts
+
+  # descending timestamp, ascending id tiebreak
+  defp sort_desc(a, b) do
+    case DateTime.compare(ts_of(a), ts_of(b)) do
+      :gt -> true
+      :lt -> false
+      :eq -> a.id <= b.id
+    end
+  end
+
+  defp after_cursor(sorted, nil), do: sorted
+
+  defp after_cursor(sorted, {c_ts, c_id}) do
+    Enum.filter(sorted, fn t ->
+      case DateTime.compare(ts_of(t), c_ts) do
+        :lt -> true
+        :gt -> false
+        :eq -> t.id > c_id
+      end
+    end)
+  end
+
+  defp cursor_of(%Task{} = t),
+    do: Base.url_encode64("#{DateTime.to_iso8601(ts_of(t))}|#{t.id}")
+
+  defp decode_cursor(nil), do: {:ok, nil}
+  defp decode_cursor(""), do: {:ok, nil}
+
+  defp decode_cursor(token) do
+    with {:ok, raw} <- Base.url_decode64(token),
+         [iso, id] <- String.split(raw, "|", parts: 2),
+         {:ok, ts, _} <- DateTime.from_iso8601(iso) do
+      {:ok, {ts, id}}
+    else
+      _ -> {:error, %A2A.Error{code: :invalid_params, message: "invalid page_token"}}
+    end
+  end
+
+  defp post_process(%Task{} = task, %ListTasksRequest{} = req) do
+    task
+    |> truncate_history(req.history_length)
+    |> maybe_drop_artifacts(req.include_artifacts)
+  end
+
+  defp truncate_history(task, nil), do: task
+  defp truncate_history(task, n) when n < 0, do: task
+
+  defp truncate_history(task, n),
+    do: %{task | history: Enum.take(task.history, -n)}
+
+  defp maybe_drop_artifacts(task, true), do: task
+  defp maybe_drop_artifacts(task, _), do: %{task | artifacts: []}
 end

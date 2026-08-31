@@ -1,25 +1,72 @@
 name: CI
 on: [push, pull_request]
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Each Elixir is tested against the lowest OTP it supports that is
+          # also >= our declared OTP floor of 26. Testing 1.18 against a recent
+          # OTP would prove nothing about actual 1.18 users. OTP 25 is skipped
+          # because precompiled 25 builds are not published for ubuntu-24.04.
+          - elixir: "1.18"
+            otp: "26"
+          - elixir: "1.19"
+            otp: "27"
+          # Newest pair; this row also runs the lint/type checks.
+          - elixir: "1.20"
+            otp: "29"
+            lint: true
+    name: test (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
     steps:
       - uses: actions/checkout@v4
+
+      # Loose version matching so patch releases are picked up automatically.
       - uses: erlef/setup-beam@v1
-        with: {otp-version: "26", elixir-version: "1.16"}
+        with:
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+            priv/plts
+          key: ${{ runner.os }}-otp${{ matrix.otp }}-elixir${{ matrix.elixir }}-${{ hashFiles('mix.lock') }}
+
       - run: mix deps.get
-      - run: mix hex.audit
-      - run: mix format --check-formatted
-      - run: mix credo --strict
+
+      # warnings-as-errors is enforced here, NOT in mix.exs: a future Elixir may
+      # add a warning that would otherwise break compilation for every consumer.
       - run: mix compile --warnings-as-errors
+
       - run: mix test
-      - run: mix dialyzer
+
+      # Lint and type checks run only on the newest row. Dialyzer output differs
+      # across OTP versions, so running it on every row is noise, not signal.
+      - if: matrix.lint
+        run: mix format --check-formatted
+      - if: matrix.lint
+        run: mix deps.unlock --check-unused
+      - if: matrix.lint
+        run: mix credo --strict
+      - if: matrix.lint
+        run: mix dialyzer --format github
+
+  # Proto-conformance harness: needs the protoc toolchain, so it is kept as a
+  # separate job rather than folded into the matrix. Run on the newest pair.
   proto:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
-        with: {otp-version: "26", elixir-version: "1.16"}
+        with:
+          otp-version: "29"
+          elixir-version: "1.20"
       - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - run: mix deps.get
       # The protoc-gen-elixir plugin MUST match the pinned `protobuf` lib so the

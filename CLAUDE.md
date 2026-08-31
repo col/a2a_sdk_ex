@@ -32,14 +32,23 @@ both served by the shared `A2A.Server.EventStream` (subscribe-and-yield with
 three-signal termination, see ADR-0009), plus a configurable, SDK-side
 `:drain_timeout` for the blocking path.
 
-The **HTTP transport** has landed (JSON-RPC binding, ADR-0010): `A2A.Plug.Router`
-(mountable `Plug.Router`) + `A2A.Plug.JSONRPC` (envelope decode/dispatch) +
-`A2A.Plug.SSE` (streaming responses), plus an optional `A2A.Standalone`
-(Bandit-backed) for running without a host web framework. Four methods are
-wired — `message/send`, `message/stream`, `tasks/get`, `tasks/resubscribe` —
-rendered via `A2A.Error.to_jsonrpc/1`. `plug` is now a **hard** runtime dep;
-`bandit` is optional (only needed for `A2A.Standalone`). `tasks/cancel`,
-`tasks/list`, and the REST (HTTP+JSON) binding remain deferred.
+The **HTTP transport** has landed for both bindings (ADR-0010, ADR-0011):
+`A2A.Plug.Router` (mountable `Plug.Router`) + `A2A.Plug.JSONRPC` (envelope
+decode/dispatch) + `A2A.Plug.REST` (REST transport mechanics — path/query/body
+→ typed request via `A2A.JSON`, `application/a2a+json` responses) +
+`A2A.Plug.SSE` (streaming responses, shared by both bindings via a
+frame-formatter argument), plus an optional `A2A.Standalone` (Bandit-backed)
+for running without a host web framework. All six operations are wired on
+both bindings — `message/send`, `message/stream`, `tasks/get`,
+`tasks/cancel`, `tasks/list`, `tasks/resubscribe` — rendered via
+`A2A.Error.to_jsonrpc/1` (JSON-RPC) or `A2A.Error.to_rest/1` (REST,
+`google.rpc.Status` body), two projections of one error-code table. `plug` is
+now a **hard** runtime dep; `bandit` is optional (only needed for
+`A2A.Standalone`). Cancellation needed `A2A.Server.Execution` restructured to
+run the author's `execute/2` in an unlinked, monitored **child process**, so
+the `Execution` GenServer's mailbox stays free to handle a cancel call while
+`execute/2` is in flight (see ADR-0011). Push-notification-config REST routes
+and `/{tenant}/…` scoping remain deferred.
 
 `examples/echo_server/` is a minimal runnable agent demonstrating the HTTP
 transport end-to-end. It has its **own `mix.exs`** (path-deps on this repo) and

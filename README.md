@@ -10,12 +10,48 @@ architectural seams — but designed for the Elixir/OTP ecosystem rather than
 ported line-by-line.
 
 > **Status:** the typed foundation, the server-core runtime — blocking
-> `message/send`, streaming `message/stream` and `tasks/resubscribe` (shared
-> `EventStream`, configurable drain timeout) over the OTP process model — and
-> the JSON-RPC HTTP transport (`A2A.Plug.Router`/`A2A.Plug.SSE`, optional
-> `A2A.Standalone`) are implemented, with a runnable
-> [`examples/echo_server/`](examples/echo_server); REST, cancel, `tasks/list`,
-> and push are the next phases. Design under [`docs/`](docs/architecture.md).
+> `message/send`, streaming `message/stream` and `tasks/resubscribe`, plus
+> `tasks/cancel` and `tasks/list` (shared `EventStream`, configurable drain
+> timeout) over the OTP process model — and both HTTP transports, JSON-RPC and
+> REST (`A2A.Plug.Router`/`A2A.Plug.JSONRPC`/`A2A.Plug.REST`/`A2A.Plug.SSE`,
+> optional `A2A.Standalone`), are implemented, with a runnable
+> [`examples/echo_server/`](examples/echo_server); push notifications and
+> multi-tenant scoping are the next phases. Design under
+> [`docs/`](docs/architecture.md).
+
+## Try it
+
+Both HTTP bindings are mounted by [`examples/echo_server/`](examples/echo_server)
+(`mix run --no-halt` from that directory, port 5001). JSON-RPC:
+
+```bash
+curl -s http://localhost:5001/ \
+  -H 'content-type: application/json' \
+  -d '{
+    "jsonrpc": "2.0", "id": 1, "method": "message/send",
+    "params": {"message": {"messageId": "m1", "role": "ROLE_USER",
+      "parts": [{"text": "hello"}]}}
+  }' | jq
+```
+
+REST — same call, resource-style, `application/a2a+json`:
+
+```bash
+curl -s http://localhost:5001/message:send \
+  -H 'content-type: application/json' \
+  -d '{"message": {"messageId": "m1", "role": "ROLE_USER",
+    "parts": [{"text": "hello"}]}}' | jq
+```
+
+List and cancel tasks over REST:
+
+```bash
+curl -s http://localhost:5001/tasks | jq
+curl -s -X POST http://localhost:5001/tasks/<task-id>:cancel | jq
+```
+
+See the example's own [README](examples/echo_server/README.md) for the full
+walkthrough (agent card, streaming over both bindings).
 
 ## Design decisions
 
@@ -39,6 +75,14 @@ Full context and consequences for each: [decision records](docs/architecture/dec
 
 - **[Architecture overview](docs/architecture.md)** — the high-level map: components, boundaries, invariants.
 - Detailed docs under [`docs/architecture/`](docs/architecture/): data model, process model, request handling, transports, streaming & events, persistence, cross-cutting concerns, scope & roadmap.
+
+## Requirements
+
+- **Elixir 1.18+**
+- **Erlang/OTP 26+**
+
+The library is tested in CI across Elixir 1.18 / 1.19 / 1.20, each against the
+lowest OTP it supports at or above the OTP 26 floor.
 
 ## License
 

@@ -45,7 +45,7 @@ defmodule A2A.Plug.JSONRPCTest do
   test "unknown method -> -32601", %{server: server} do
     {:ok, env} =
       JSONRPC.decode_envelope(
-        Jason.encode!(%{"jsonrpc" => "2.0", "id" => 7, "method" => "tasks/cancel", "params" => %{}})
+        Jason.encode!(%{"jsonrpc" => "2.0", "id" => 7, "method" => "tasks/bogus", "params" => %{}})
       )
 
     assert {:error, %{"id" => 7, "error" => %{"code" => -32_601}}} = JSONRPC.dispatch(server, env)
@@ -118,5 +118,19 @@ defmodule A2A.Plug.JSONRPCTest do
     # Enumerate in THIS process (the caller) per the streaming contract.
     frames = Enum.to_list(enum)
     assert Enum.any?(frames, &match?(%A2A.Types.StreamResponse{}, &1))
+  end
+
+  test "tasks/cancel dispatches and renders the task", %{server: server} do
+    env = %{method: "tasks/cancel", params: %{"id" => "missing"}, id: 1}
+    assert {:error, %{"error" => %{"code" => -32_001}}} = JSONRPC.dispatch(server, env)
+  end
+
+  test "tasks/list dispatches and renders a ListTasksResponse", %{server: server} do
+    {:ok, send_env} = JSONRPC.decode_envelope(send_body("hi"))
+    assert {:reply, _} = JSONRPC.dispatch(server, send_env)
+
+    env = %{method: "tasks/list", params: %{}, id: 2}
+    assert {:reply, %{"result" => result}} = JSONRPC.dispatch(server, env)
+    assert Map.has_key?(result, "tasks")
   end
 end

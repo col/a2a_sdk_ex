@@ -71,7 +71,7 @@ defmodule A2A.Plug.RouterTest do
   end
 
   test "POST unknown method -> -32601 with 200 envelope", %{opts: opts} do
-    conn = post(opts, %{"jsonrpc" => "2.0", "id" => 2, "method" => "tasks/cancel", "params" => %{}})
+    conn = post(opts, %{"jsonrpc" => "2.0", "id" => 2, "method" => "tasks/bogus", "params" => %{}})
     assert conn.status == 200
     assert %{"error" => %{"code" => -32_601}} = Jason.decode!(conn.resp_body)
   end
