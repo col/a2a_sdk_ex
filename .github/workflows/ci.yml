@@ -81,13 +81,17 @@ jobs:
       - run: echo "$HOME/.mix/escripts" >> $GITHUB_PATH
       - run: mix a2a.gen_proto
       - run: mix test --only proto
+  # A2A TCK compliance: runs the official conformance suite against the echo
+  # server. Report-only for now (continue-on-error), so it never fails the build.
   compliance:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true          # report-only: never fails the build (yet)
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
-        with: {otp-version: "26", elixir-version: "1.16"}
+        with:
+          otp-version: "29"
+          elixir-version: "1.20"
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
       - name: Install uv
