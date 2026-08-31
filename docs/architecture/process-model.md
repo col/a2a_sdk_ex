@@ -22,7 +22,10 @@ A2A.Supervisor
 ├── {Phoenix.PubSub, name: <configurable>}   # or reuse the host app's PubSub
 ├── Registry (unique keys: task_id → execution pid)
 ├── DynamicSupervisor (one transient child per running execution)
-└── store owners (ETS-backed TaskStore / PushConfigStore, or user impls)
+├── store owners (ETS-backed TaskStore / PushConfigStore, or user impls)
+└── [if push_notifications: true]
+    ├── Registry (unique keys: task_id → push dispatcher pid)
+    └── DynamicSupervisor (one temporary PushDispatcher per task with ≥1 config)
 ```
 
 - **`Phoenix.PubSub`** — fan-out of task events. Lightweight, no Phoenix
@@ -33,6 +36,12 @@ A2A.Supervisor
   task and enabling lookup for cancel/resubscribe.
 - **`DynamicSupervisor`** — supervises execution processes; `:transient` children
   so a normal completion exits cleanly while a crash is restarted/reported.
+- **Push registry + `DynamicSupervisor`** (opt-in, `push_notifications: true`)
+  — a second, push-scoped `Registry`/`DynamicSupervisor` pair maps `task_id →
+  A2A.Server.PushDispatcher` pid. One `:temporary` dispatcher runs per task
+  that has ≥1 registered push config, started lazily on first registration
+  via `PushDispatcher.Supervisor.ensure_started/2`. See
+  [ADR-0012](decisions/0012-push-notifications.md).
 
 ## The execution process
 
@@ -60,16 +69,21 @@ execution process ──broadcast──▶  "a2a:task:<task_id>"  (PubSub topic)
                                         │
               ┌─────────────────────────┼───────────────────────────┐
               ▼                         ▼                            ▼
-        SSE plug conn            resubscribe conn              Push.Sender
-     (streaming client)        (reattached client)         (webhook delivery)
+        SSE plug conn            resubscribe conn              PushDispatcher
+     (streaming client)        (reattached client)         (webhook delivery,
+                                                          if push_notifications: true)
 ```
 
-Any number of consumers subscribe to the topic. The SSE handler, a later
-`tasks/resubscribe`, and the push-notification sender are all *just subscribers*
+Any number of consumers subscribe to the topic. The SSE handler,
+`tasks/resubscribe`, and the per-task `A2A.Server.PushDispatcher` (started
+lazily the first time a config is registered for that task — see
+[ADR-0012](decisions/0012-push-notifications.md)) are all *just subscribers*
 — none is privileged, none can write task state, and none blocks the executor.
 Adding a consumer is `Phoenix.PubSub.subscribe/2`; there is no sink registry,
 no back-pressure valve, no eviction — PubSub already handles a slow/dead
-subscriber without stalling the producer.
+subscriber without stalling the producer. A hung or failing webhook delivery
+is bounded (`push_timeout`) and logged, never raised — it affects only that
+task's dispatcher, never the executor or another task's delivery.
 
 ## Lifecycle & state transitions
 
@@ -144,4 +158,5 @@ The hot/cold split is detailed in [Persistence](persistence.md).
 
 - [Streaming and events](streaming-and-events.md) — event structs and push delivery.
 - [Request handling](request-handling.md) — who starts the execution process.
-- [ADR-0005](decisions/0005-pubsub-process-model.md).
+- [ADR-0005](decisions/0005-pubsub-process-model.md),
+  [ADR-0012](decisions/0012-push-notifications.md) (push dispatcher process).

@@ -11,12 +11,16 @@ defmodule A2A.Plug.REST do
 
   alias A2A.Types.{
     CancelTaskRequest,
+    DeleteTaskPushNotificationConfigRequest,
+    GetTaskPushNotificationConfigRequest,
     GetTaskRequest,
+    ListTaskPushNotificationConfigsRequest,
     ListTasksRequest,
     SendMessageRequest,
     SendMessageResponse,
     SubscribeToTaskRequest,
-    Task
+    Task,
+    TaskPushNotificationConfig
   }
 
   @content_type "application/a2a+json"
@@ -57,6 +61,45 @@ defmodule A2A.Plug.REST do
   def cancel_task(server, id, _body) do
     case DefaultHandler.cancel_task(server, %CancelTaskRequest{id: id}) do
       {:ok, %Task{} = t} -> {:reply, 200, A2A.JSON.to_json_map(t)}
+      {:error, %A2A.Error{} = e} -> render_error(e)
+    end
+  end
+
+  def set_push_config(server, task_id, body) when is_map(body) do
+    with {:ok, %TaskPushNotificationConfig{} = cfg} <- decode(body, TaskPushNotificationConfig),
+         {:ok, stored} <- DefaultHandler.create_push_config(server, %{cfg | task_id: task_id}) do
+      {:reply, 200, A2A.JSON.to_json_map(stored)}
+    else
+      {:error, %A2A.Error{} = e} -> render_error(e)
+      {:error, reason} -> bad_request(reason)
+    end
+  end
+
+  def get_push_config(server, task_id, id) do
+    case DefaultHandler.get_push_config(server, %GetTaskPushNotificationConfigRequest{
+           task_id: task_id,
+           id: id
+         }) do
+      {:ok, cfg} -> {:reply, 200, A2A.JSON.to_json_map(cfg)}
+      {:error, %A2A.Error{} = e} -> render_error(e)
+    end
+  end
+
+  def list_push_configs(server, task_id) do
+    case DefaultHandler.list_push_configs(server, %ListTaskPushNotificationConfigsRequest{
+           task_id: task_id
+         }) do
+      {:ok, resp} -> {:reply, 200, A2A.JSON.to_json_map(resp)}
+      {:error, %A2A.Error{} = e} -> render_error(e)
+    end
+  end
+
+  def delete_push_config(server, task_id, id) do
+    case DefaultHandler.delete_push_config(server, %DeleteTaskPushNotificationConfigRequest{
+           task_id: task_id,
+           id: id
+         }) do
+      {:ok, :deleted} -> {:reply, 200, %{}}
       {:error, %A2A.Error{} = e} -> render_error(e)
     end
   end

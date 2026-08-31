@@ -10,21 +10,37 @@ defmodule A2A.Server.DefaultHandler do
   """
   @behaviour A2A.Server.RequestHandler
 
-  alias A2A.Server.{Events, EventStream, Execution, RequestContext, ResultAssembler, TaskUpdater}
+  require Logger
+
+  alias A2A.Server.{
+    Events,
+    EventStream,
+    Execution,
+    PushDispatcher,
+    RequestContext,
+    ResultAssembler,
+    StreamFrame,
+    TaskUpdater
+  }
+
   alias A2A.Server.Events.Event
 
   alias A2A.Types.{
     CancelTaskRequest,
+    DeleteTaskPushNotificationConfigRequest,
+    GetTaskPushNotificationConfigRequest,
     GetTaskRequest,
+    ListTaskPushNotificationConfigsRequest,
+    ListTaskPushNotificationConfigsResponse,
     ListTasksRequest,
     ListTasksResponse,
     Message,
+    SendMessageConfiguration,
     SendMessageRequest,
     StreamResponse,
     SubscribeToTaskRequest,
     Task,
-    TaskArtifactUpdateEvent,
-    TaskStatusUpdateEvent
+    TaskPushNotificationConfig
   }
 
   @epoch DateTime.from_unix!(0)
@@ -45,6 +61,7 @@ defmodule A2A.Server.DefaultHandler do
 
     with :ok <- reject_terminal(server, task_id) do
       ctx = build_context(message, task_id, context_id, req)
+      maybe_register_inline_push(server, task_id, req)
       :ok = Events.subscribe(server.pubsub, task_id)
 
       case start_execution(server, task_id, context_id, ctx) do
@@ -100,13 +117,14 @@ defmodule A2A.Server.DefaultHandler do
 
     with :ok <- reject_terminal(server, task_id) do
       ctx = build_context(message, task_id, context_id, req)
+      maybe_register_inline_push(server, task_id, req)
       :ok = Events.subscribe(server.pubsub, task_id)
 
       case start_execution(server, task_id, context_id, ctx) do
         {:ok, pid} ->
           server.pubsub
           |> EventStream.stream(task_id, monitor: pid, idle_timeout: :infinity, subscribe?: false)
-          |> Stream.map(&to_frame(&1.payload))
+          |> Stream.map(&StreamFrame.of(&1.payload))
 
         {:error, {:already_started, _}} ->
           Events.unsubscribe(server.pubsub, task_id)
@@ -118,11 +136,6 @@ defmodule A2A.Server.DefaultHandler do
       end
     end
   end
-
-  defp to_frame(%Task{} = t), do: StreamResponse.task(t)
-  defp to_frame(%Message{} = m), do: StreamResponse.message(m)
-  defp to_frame(%TaskStatusUpdateEvent{} = e), do: StreamResponse.status_update(e)
-  defp to_frame(%TaskArtifactUpdateEvent{} = e), do: StreamResponse.artifact_update(e)
 
   @doc """
   Re-attaches to an in-flight (or already-settled) task and returns a lazy stream: a
@@ -162,7 +175,7 @@ defmodule A2A.Server.DefaultHandler do
         live_stream =
           server.pubsub
           |> EventStream.stream(task_id, monitor: pid, idle_timeout: :infinity, subscribe?: false)
-          |> Stream.map(&to_frame(&1.payload))
+          |> Stream.map(&StreamFrame.of(&1.payload))
 
         {task, live_stream}
 
@@ -397,4 +410,146 @@ defmodule A2A.Server.DefaultHandler do
 
   defp maybe_drop_artifacts(task, true), do: task
   defp maybe_drop_artifacts(task, _), do: %{task | artifacts: []}
+
+  # --- push notification config ops ---
+
+  @impl true
+  def create_push_config(%A2A.Server{} = server, %TaskPushNotificationConfig{} = config) do
+    with :ok <- ensure_push_enabled(server),
+         :ok <- ensure_task_id(config.task_id),
+         :ok <- validate_url(server, config.url) do
+      stored = %{config | id: config.id || server.id_generator.()}
+      :ok = server.push_store.put(stored, server.scope)
+      ensure_dispatcher(server, stored.task_id)
+      {:ok, stored}
+    end
+  end
+
+  @impl true
+  def get_push_config(%A2A.Server{} = server, %GetTaskPushNotificationConfigRequest{
+        task_id: task_id,
+        id: id
+      }) do
+    with :ok <- ensure_push_enabled(server) do
+      case server.push_store.get(task_id, id, server.scope) do
+        {:ok, config} -> {:ok, config}
+        {:error, :not_found} -> {:error, A2A.Error.not_found(task_id)}
+      end
+    end
+  end
+
+  @impl true
+  def list_push_configs(%A2A.Server{} = server, %ListTaskPushNotificationConfigsRequest{
+        task_id: task_id
+      }) do
+    with :ok <- ensure_push_enabled(server) do
+      {:ok, configs} = server.push_store.list(task_id, server.scope)
+      {:ok, %ListTaskPushNotificationConfigsResponse{configs: configs, next_page_token: ""}}
+    end
+  end
+
+  @impl true
+  def delete_push_config(%A2A.Server{} = server, %DeleteTaskPushNotificationConfigRequest{
+        task_id: task_id,
+        id: id
+      }) do
+    with :ok <- ensure_push_enabled(server) do
+      :ok = server.push_store.delete(task_id, id, server.scope)
+      {:ok, :deleted}
+    end
+  end
+
+  defp maybe_register_inline_push(%A2A.Server{push_notifications: true} = server, task_id, %{
+         configuration: %SendMessageConfiguration{
+           task_push_notification_config: %TaskPushNotificationConfig{} = cfg
+         }
+       }) do
+    stored = %{cfg | task_id: task_id, id: cfg.id || server.id_generator.()}
+
+    case validate_url(server, stored.url) do
+      :ok ->
+        best_effort_put(server, stored)
+        ensure_dispatcher(server, task_id)
+        :ok
+
+      {:error, _} ->
+        # Best-effort: an invalid inline webhook URL is ignored rather than
+        # failing the whole message/send. The config CRUD path validates strictly.
+        :ok
+    end
+  end
+
+  defp maybe_register_inline_push(_server, _task_id, _req), do: :ok
+
+  # Best-effort store write for the INLINE registration path only: a custom
+  # `push_store.put/2` that raises, exits, or returns something other than `:ok`
+  # must not fail `message/send` (the config CRUD path, `create_push_config/2`,
+  # deliberately lets a store failure surface — this helper is inline-only).
+  defp best_effort_put(server, stored) do
+    case server.push_store.put(stored, server.scope) do
+      :ok ->
+        :ok
+
+      other ->
+        Logger.warning(
+          "inline push config store failed task_id=#{stored.task_id}: #{inspect(other)}"
+        )
+
+        :ok
+    end
+  rescue
+    e ->
+      Logger.warning("inline push config store raised task_id=#{stored.task_id}: #{inspect(e)}")
+      :ok
+  catch
+    kind, reason ->
+      Logger.warning(
+        "inline push config store #{kind} task_id=#{stored.task_id}: #{inspect(reason)}"
+      )
+
+      :ok
+  end
+
+  # Best-effort dispatcher start: a failure to start the delivery process must not
+  # fail config creation (config is persisted) nor the message/send (inline path).
+  defp ensure_dispatcher(server, task_id) do
+    case PushDispatcher.Supervisor.ensure_started(server, task_id) do
+      {:ok, _pid} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("push dispatcher start failed task_id=#{task_id}: #{inspect(reason)}")
+        :ok
+    end
+  end
+
+  defp ensure_push_enabled(%A2A.Server{push_notifications: true, push_store: store})
+       when not is_nil(store),
+       do: :ok
+
+  defp ensure_push_enabled(_server),
+    do:
+      {:error,
+       %A2A.Error{
+         code: :push_notification_not_supported,
+         message: "push notifications are not supported by this agent"
+       }}
+
+  defp ensure_task_id(task_id) when is_binary(task_id) and task_id != "", do: :ok
+
+  defp ensure_task_id(_),
+    do: {:error, %A2A.Error{code: :invalid_params, message: "task_id is required"}}
+
+  defp validate_url(%A2A.Server{push_url_validator: nil}, _url), do: :ok
+
+  defp validate_url(%A2A.Server{push_url_validator: v}, url) do
+    case v.(url) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        {:error,
+         %A2A.Error{code: :invalid_params, message: "invalid webhook url: #{inspect(reason)}"}}
+    end
+  end
 end

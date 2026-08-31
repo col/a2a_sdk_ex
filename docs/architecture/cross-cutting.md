@@ -70,7 +70,7 @@ per-transport rendering:
 | `:task_not_cancelable` | Task already terminal |
 | `:unsupported_operation` | Method not supported by this agent |
 | `:content_type_not_supported` | Unacceptable input/output mode |
-| `:push_not_supported` | Agent does not advertise push notifications |
+| `:push_notification_not_supported` | Agent does not advertise push notifications |
 | `:invalid_agent_response` | Executor produced an invalid event |
 | `:extension_required` | A required extension was not activated |
 

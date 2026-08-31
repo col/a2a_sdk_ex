@@ -47,8 +47,25 @@ now a **hard** runtime dep; `bandit` is optional (only needed for
 `A2A.Standalone`). Cancellation needed `A2A.Server.Execution` restructured to
 run the author's `execute/2` in an unlinked, monitored **child process**, so
 the `Execution` GenServer's mailbox stays free to handle a cancel call while
-`execute/2` is in flight (see ADR-0011). Push-notification-config REST routes
-and `/{tenant}/…` scoping remain deferred.
+`execute/2` is in flight (see ADR-0011). `/{tenant}/…` scoping remains deferred.
+
+**Push notifications** (ADR-0012) are opt-in via `push_notifications: true` on
+`A2A.Server.Supervisor`. New modules: `A2A.Server.PushConfigStore`
+(+`.ETS` default) for config CRUD storage, `A2A.Server.PushSender`
+(+`.Default`, `Req`-backed with an `:httpc` fallback) for outbound delivery,
+`A2A.Server.PushDispatcher` (+`.Supervisor`, a `DynamicSupervisor`/`Registry`
+pair) — one `:temporary` dispatcher process per task, subscribing to that
+task's existing PubSub topic like any other consumer — and
+`A2A.Server.StreamFrame`, the event→`StreamResponse` mapping shared by the SSE
+path and the dispatcher. Delivery is **best-effort per task**: events to a
+task's registered webhooks are delivered concurrently but barriered per event
+(ordering), failures are logged and dropped (never raised, never retried),
+and a hung sender is bounded by `push_timeout`. JSON-RPC
+(`tasks/pushNotificationConfig/{set,get,list,delete}`) and REST
+(`/tasks/{task_id}/pushNotificationConfigs[/{id}]`) both land on the four
+`DefaultHandler` push callbacks, gated by the `:push_notification_not_supported`
+`A2A.Error` when the server wasn't started with push enabled. A host must separately set
+`AgentCard.capabilities.push_notifications = true` to *advertise* support.
 
 `examples/echo_server/` is a minimal runnable agent demonstrating the HTTP
 transport end-to-end. It has its **own `mix.exs`** (path-deps on this repo) and
@@ -71,7 +88,13 @@ harness exists to track the gap, not gate on it.
   (`server = %{server | executor: MyExecutor}`); `DefaultHandler` reads
   `server.executor` at execution-start. A proper fix (per-instance ETS table +
   GenServer name) is a candidate before multi-tenant or the transports phase spins
-  up concurrent servers.
+  up concurrent servers. **`A2A.Server.PushConfigStore.ETS` shares this same
+  global-naming limitation** — same cause, same fix candidate.
+- **Push delivery only sees events emitted after a dispatcher subscribes.** A
+  `PushDispatcher` starts lazily on first config registration for a task; it is
+  best-effort and forward-only, not a replay log — a config registered mid-task
+  does not retroactively receive earlier events. A receiver that needs the full
+  history reconciles via `tasks/get`.
 - **Streaming enumerables must be enumerated once, in the calling process.**
   `send_message_stream/2` and `resubscribe/2` subscribe eagerly (in the caller)
   then return a lazy stream whose `receive` runs at enumeration time — enumerate
@@ -135,8 +158,9 @@ them casually.
 - **TDD.** Write the failing test first; the everyday `mix test` must stay green
   with no proto toolchain.
 - Runtime dependency graph: `jason`, `phoenix_pubsub`, `plug` (+ optional
-  `bandit` for `A2A.Standalone`). The typed foundation alone (`A2A.Types.*` +
-  `A2A.JSON`) still depends on `jason` only.
+  `bandit` for `A2A.Standalone`, optional `req` for `A2A.Server.PushSender.Default`
+  — falls back to OTP's `:httpc` when `req` isn't a dependency). The typed
+  foundation alone (`A2A.Types.*` + `A2A.JSON`) still depends on `jason` only.
 
 ## Documentation policy
 

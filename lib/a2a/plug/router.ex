@@ -86,6 +86,27 @@ defmodule A2A.Plug.Router do
     render_rest(conn, REST.list_tasks(server, conn.query_params))
   end
 
+  post "/tasks/:task_id/pushNotificationConfigs" do
+    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    {:ok, body, conn} = read_body(conn)
+    render_rest(conn, REST.set_push_config(server, task_id, decode_body(body)))
+  end
+
+  get "/tasks/:task_id/pushNotificationConfigs" do
+    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    render_rest(conn, REST.list_push_configs(server, task_id))
+  end
+
+  get "/tasks/:task_id/pushNotificationConfigs/:id" do
+    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    render_rest(conn, REST.get_push_config(server, task_id, id))
+  end
+
+  delete "/tasks/:task_id/pushNotificationConfigs/:id" do
+    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    render_rest(conn, REST.delete_push_config(server, task_id, id))
+  end
+
   get "/tasks/:id" do
     server = A2A.Server.handle(conn.assigns.init_opts[:server])
 

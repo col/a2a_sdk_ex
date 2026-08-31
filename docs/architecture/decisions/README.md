@@ -18,6 +18,8 @@ supersedes an earlier one.
 | [0008](0008-v1-feature-tiers.md) | v1 feature tiers | Accepted |
 | [0009](0009-eventstream-termination.md) | EventStream — shared stream, three-signal termination | Accepted |
 | [0010](0010-jsonrpc-transport-first.md) | JSON-RPC transport first; REST follows | Accepted |
+| [0011](0011-rest-binding-and-cancel-list.md) | REST binding, `tasks/cancel`, and `tasks/list` land | Accepted |
+| [0012](0012-push-notifications.md) | Push notification config CRUD + best-effort delivery engine | Accepted |
 
 ADRs 0001–0008 were taken together during initial architecture planning (2026-08-29),
 informed by a feature inventory of the official

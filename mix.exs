@@ -35,7 +35,7 @@ defmodule A2A.MixProject do
     [
       plt_local_path: "priv/plts",
       plt_core_path: "priv/plts",
-      plt_add_apps: [:mix, :ex_unit]
+      plt_add_apps: [:mix, :ex_unit, :inets, :ssl]
     ]
   end
 
@@ -45,6 +45,7 @@ defmodule A2A.MixProject do
       {:phoenix_pubsub, "~> 2.1"},
       {:plug, "~> 1.16"},
       {:bandit, "~> 1.5", optional: true},
+      {:req, "~> 0.5", optional: true},
       {:stream_data, "~> 1.1", only: :test},
       {:protobuf, "~> 0.14", only: [:dev, :test], runtime: false},
       {:google_protos, "~> 0.4", only: [:dev, :test]},
