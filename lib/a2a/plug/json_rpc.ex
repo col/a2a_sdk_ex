@@ -6,7 +6,16 @@ defmodule A2A.Plug.JSONRPC do
   result for the router to render. No `Plug.Conn`, no sockets.
   """
   alias A2A.Server.DefaultHandler
-  alias A2A.Types.{GetTaskRequest, SendMessageRequest, SendMessageResponse, SubscribeToTaskRequest}
+
+  alias A2A.Types.{
+    CancelTaskRequest,
+    GetTaskRequest,
+    ListTasksRequest,
+    SendMessageRequest,
+    SendMessageResponse,
+    SubscribeToTaskRequest
+  }
+
   alias A2A.Types.Task
 
   @type envelope :: %{method: binary(), params: map(), id: term()}
@@ -16,7 +25,9 @@ defmodule A2A.Plug.JSONRPC do
     "message/send" => {SendMessageRequest, :unary},
     "message/stream" => {SendMessageRequest, :stream},
     "tasks/get" => {GetTaskRequest, :unary},
-    "tasks/resubscribe" => {SubscribeToTaskRequest, :stream}
+    "tasks/resubscribe" => {SubscribeToTaskRequest, :stream},
+    "tasks/cancel" => {CancelTaskRequest, :unary},
+    "tasks/list" => {ListTasksRequest, :unary}
   }
 
   @spec decode_envelope(binary()) :: {:ok, envelope()} | {:error, map()}
@@ -66,6 +77,20 @@ defmodule A2A.Plug.JSONRPC do
   defp call(server, id, :unary, %GetTaskRequest{} = req) do
     case DefaultHandler.get_task(server, req) do
       {:ok, %Task{} = t} -> {:reply, result_envelope(id, t)}
+      {:error, err} -> {:error, error_from(id, err)}
+    end
+  end
+
+  defp call(server, id, :unary, %CancelTaskRequest{} = req) do
+    case DefaultHandler.cancel_task(server, req) do
+      {:ok, %Task{} = t} -> {:reply, result_envelope(id, t)}
+      {:error, err} -> {:error, error_from(id, err)}
+    end
+  end
+
+  defp call(server, id, :unary, %ListTasksRequest{} = req) do
+    case DefaultHandler.list_tasks(server, req) do
+      {:ok, resp} -> {:reply, result_envelope(id, resp)}
       {:error, err} -> {:error, error_from(id, err)}
     end
   end

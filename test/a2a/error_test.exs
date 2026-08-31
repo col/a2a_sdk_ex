@@ -15,6 +15,15 @@ defmodule A2A.ErrorTest do
     assert_raise A2A.Error, fn -> raise A2A.Error.not_found("t-3") end
   end
 
+  describe "not_cancelable/1" do
+    test "builds a :task_not_cancelable error carrying the id" do
+      err = A2A.Error.not_cancelable("t1")
+      assert err.code == :task_not_cancelable
+      assert err.data == %{task_id: "t1"}
+      assert err.message =~ "t1"
+    end
+  end
+
   describe "to_jsonrpc/1" do
     test "maps known semantic codes to A2A JSON-RPC codes" do
       assert %{"code" => -32_001} = A2A.Error.to_jsonrpc(A2A.Error.not_found("t"))
@@ -45,6 +54,62 @@ defmodule A2A.ErrorTest do
 
       bare = A2A.Error.to_jsonrpc(%A2A.Error{code: :internal_error, message: "boom", data: nil})
       refute Map.has_key?(bare, "data")
+    end
+  end
+
+  describe "to_jsonrpc/1 (unchanged mappings)" do
+    test "known codes map to their JSON-RPC integers" do
+      assert A2A.Error.to_jsonrpc(A2A.Error.not_found("t"))["code"] == -32_001
+      assert A2A.Error.to_jsonrpc(A2A.Error.not_cancelable("t"))["code"] == -32_002
+      assert A2A.Error.to_jsonrpc(%A2A.Error{code: :unsupported_operation})["code"] == -32_004
+    end
+
+    test "unknown/internal code falls back to -32603" do
+      assert A2A.Error.to_jsonrpc(%A2A.Error{code: :internal_error})["code"] == -32_603
+      assert A2A.Error.to_jsonrpc(%A2A.Error{code: :something_else})["code"] == -32_603
+    end
+  end
+
+  describe "to_rest/1" do
+    test "task_not_found -> 404 with google.rpc.Status body + ErrorInfo" do
+      {status, body} = A2A.Error.to_rest(A2A.Error.not_found("abc"))
+      assert status == 404
+      assert body["code"] == 5
+      assert body["message"] =~ "abc"
+      assert [detail] = body["details"]
+      assert detail["@type"] == "type.googleapis.com/google.rpc.ErrorInfo"
+      assert detail["reason"] == "TASK_NOT_FOUND"
+      assert detail["domain"] == "a2a-protocol.org"
+      assert detail["metadata"] == %{"task_id" => "abc"}
+    end
+
+    test "status mapping per spec §5.4" do
+      assert {400, _} = A2A.Error.to_rest(A2A.Error.not_cancelable("t"))
+      assert {400, _} = A2A.Error.to_rest(%A2A.Error{code: :unsupported_operation})
+      assert {400, _} = A2A.Error.to_rest(%A2A.Error{code: :content_type_not_supported})
+      assert {500, _} = A2A.Error.to_rest(%A2A.Error{code: :invalid_agent_response})
+      assert {500, _} = A2A.Error.to_rest(%A2A.Error{code: :internal_error})
+    end
+
+    test "nil data omits metadata" do
+      {_status, body} = A2A.Error.to_rest(%A2A.Error{code: :internal_error, message: "boom"})
+      assert [detail] = body["details"]
+      refute Map.has_key?(detail, "metadata")
+    end
+
+    test "invalid_params -> 400 with INVALID_ARGUMENT reason and grpc code 3" do
+      {status, body} = A2A.Error.to_rest(%A2A.Error{code: :invalid_params, message: "bad token"})
+      assert status == 400
+      assert body["code"] == 3
+      assert [detail] = body["details"]
+      assert detail["reason"] == "INVALID_ARGUMENT"
+    end
+  end
+
+  describe "to_jsonrpc/1 invalid_params" do
+    test "maps to -32602" do
+      assert %{"code" => -32_602} =
+               A2A.Error.to_jsonrpc(%A2A.Error{code: :invalid_params, message: "bad token"})
     end
   end
 end

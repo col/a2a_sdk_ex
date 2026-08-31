@@ -86,7 +86,11 @@ defmodule A2A.Server.TaskUpdater do
     evt = %TaskStatusUpdateEvent{
       task_id: u.task_id,
       context_id: u.context_id,
-      status: %TaskStatus{state: state, message: message}
+      status: %TaskStatus{
+        state: state,
+        message: message,
+        timestamp: DateTime.utc_now() |> DateTime.truncate(:second)
+      }
     }
 
     # Governs ENDING THE BLOCKING DRAIN (the `Enum.reduce_while` fold over

@@ -89,8 +89,26 @@ Rendering:
   | `:invalid_agent_response` | `-32006` |
   | internal / timeout / unmapped | `-32603` |
 
-- `A2A.Error.to_rest/1` → HTTP status + JSON body. **Pending** the REST
-  transport phase — not yet implemented.
+- `A2A.Error.to_rest/1` — **landed** — renders `{http_status, body}` where
+  `body` is `google.rpc.Status` ProtoJSON: a canonical `google.rpc.Code`
+  `"code"` int, `"message"`, and a `"details"` array carrying one
+  `google.rpc.ErrorInfo` (`reason` upper-snake-case, `domain:
+  "a2a-protocol.org"`, `metadata` stringified from `A2A.Error.data`). HTTP
+  status mapping (spec §5.4):
+
+  | Semantic error | HTTP status |
+  | --- | --- |
+  | `:task_not_found` | `404` |
+  | `:task_not_cancelable` / `:task_not_continuable` / `:unsupported_operation` / `:content_type_not_supported` / `:push_notification_not_supported` | `400` |
+  | `:task_in_progress` | `409` |
+  | `:invalid_agent_response` / internal / unmapped | `500` |
+  | `:timeout` | `504` |
+
+  `to_jsonrpc/1` and `to_rest/1` are two projections of **one** table in
+  `A2A.Error` keyed by error atom (`{jsonrpc_code, http_status, grpc_code,
+  reason}`), so the two renderers cannot drift — adding a semantic error is
+  one row, read by both. See
+  [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md).
 
 Errors are **tagged structs, not exceptions on the hot path** — the handler
 returns `{:error, %A2A.Error{}}` and the transport renders it. Unexpected raises
@@ -126,4 +144,5 @@ required global configuration**, so the whole tree composes inside a host app
 
 - [Request handling](request-handling.md), [Persistence](persistence.md),
   [Streaming and events](streaming-and-events.md).
-- [ADR-0008](decisions/0008-v1-feature-tiers.md).
+- [ADR-0008](decisions/0008-v1-feature-tiers.md),
+  [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md).

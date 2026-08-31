@@ -34,5 +34,34 @@ defmodule A2A.Server.TaskStore.ETS do
     :ok
   end
 
+  @impl A2A.Server.TaskStore
+  def list(filter, %A2A.Scope{tenant: t, owner: o} = _scope) do
+    tasks =
+      @table
+      |> :ets.match_object({{t, o, :_}, :_})
+      |> Enum.map(fn {_k, task} -> task end)
+      |> Enum.filter(&matches?(&1, filter))
+
+    {:ok, tasks}
+  end
+
   defp key(id, %A2A.Scope{tenant: t, owner: o}), do: {t, o, id}
+
+  defp matches?(task, filter) do
+    match_context?(task, filter[:context_id]) and
+      match_status?(task, filter[:status]) and
+      match_after?(task, filter[:status_timestamp_after])
+  end
+
+  defp match_context?(_task, nil), do: true
+  defp match_context?(task, ctx), do: task.context_id == ctx
+
+  defp match_status?(_task, nil), do: true
+  defp match_status?(task, status), do: task.status.state == status
+
+  defp match_after?(_task, nil), do: true
+  defp match_after?(%{status: %{timestamp: nil}}, _after), do: false
+
+  defp match_after?(task, after_dt),
+    do: DateTime.compare(task.status.timestamp, after_dt) == :gt
 end

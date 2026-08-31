@@ -158,6 +158,58 @@ DefaultHandler.send_message(server, request, drain_timeout: 30_000)
   streaming/SSE consumer (not the drain loop) owns disconnect semantics; see
   [ADR-0009](decisions/0009-eventstream-termination.md).
 
+### `cancel_task`: cooperative but authoritative
+
+`cancel_task/2` looks up the task's execution process by `Registry`:
+
+- **Live execution** — `GenServer.call(pid, :cancel)`. `Execution` re-reads the
+  task from the store (a fresh read, not its cached projection) to decide
+  terminality, so a task that completed in the race window between the
+  caller's `Registry.lookup` and this call isn't overwritten. If already
+  terminal, it replies `{:error, task_not_cancelable}`. Otherwise it kills the
+  in-flight child running `execute/2`, then — if the executor exports
+  `cancel/2` — invokes it; the author's hook is **respected**, including if it
+  emits its own terminal (a custom final message, even a late `complete`). If
+  the task is still non-terminal after the hook, the SDK settles `:canceled`
+  itself, the default outcome when the author declines to settle.
+- **Process gone in the race window** (`GenServer.call` exits with
+  `{:noproc, _}` or `{:normal, _}`) — falls back to a fresh store read, which
+  is terminal by construction, and answers `task_not_cancelable`.
+- **No live execution** — falls back to the store directly: terminal task →
+  `task_not_cancelable`; non-terminal persisted task (`input_required`, or a
+  projection orphaned by an earlier crash) → settle `:canceled` in the store
+  via a seeded `TaskUpdater` (persists **and** broadcasts, so a late
+  resubscriber sees it); missing → `task_not_found`.
+
+Either way the terminal settlement goes through the same `TaskUpdater` path as
+any other status update, so it ends any attached SSE stream and unblocks any
+blocking drain — cancel integrates with the existing event path rather than
+side-channeling. See [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md)
+for why this requires `Execution` to run the author's `execute/2` in an
+unlinked, monitored child process (its GenServer mailbox must stay free to
+receive the cancel call while `execute/2` is in flight).
+
+### `list_tasks`: ordering and pagination contract
+
+`list_tasks/2` is spec-faithful (a2a-protocol.org §ListTasks). `TaskStore`'s
+`list/2` is a dumb, scoped, filtered query surface (`context_id`, `status`,
+`status_timestamp_after`); the handler owns everything spec-shaped:
+
+- **Order** — task **status timestamp, descending** (most-recently-updated
+  first), tie-broken by `task_id` ascending, so the sort — and the cursor — is
+  total and stable.
+- **Cursor pagination** — `page_token` is opaque: base64 of the sort key
+  `{status_timestamp, task_id}` of the last item returned. The next page is
+  everything strictly after that cursor in `(timestamp desc, id asc)` order.
+  A malformed token is rejected as invalid params.
+- **`page_size`** defaults to **50**, clamped to **1..100**.
+- **`next_page_token`** is the last item's cursor when a further page exists,
+  else `""` (empty string, per spec — never null).
+- **`total_size`** is the count of all filtered matches before pagination.
+- **Per-task post-processing** on the returned page: `history_length`
+  truncates `history` to the most recent N entries (absent = unbounded);
+  `include_artifacts` (default `false`) drops `artifacts` when unset.
+
 ### Result assembly
 
 A result assembler folds the event stream into the current `Task` (artifacts
@@ -170,3 +222,5 @@ serialization it needs is provided by the execution process, not a global lock.
 - [Process model](process-model.md) — the execution process this handler drives.
 - [Streaming and events](streaming-and-events.md) — event and stream shapes.
 - [Transports](transports.md) — the plugs that call this handler.
+- [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md) — the `Execution`
+  child-process restructure and the cancel/list design.
