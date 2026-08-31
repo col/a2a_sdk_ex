@@ -196,13 +196,33 @@ Streaming is where the OTP model pays off. The SSE handler:
    emits the bare `StreamResponse` ProtoJSON with no envelope. The
    subscribe/peek/chunk mechanics are shared — only the frame formatter
    differs.
-4. Ends when a terminal (or `input_required`) event arrives. A client
-   disconnect simply unsubscribes; because the execution process is independent
-   of the consumer, the task keeps running and can be re-attached via
-   `resubscribe`.
+4. Ends when a **task-terminal** event arrives — `completed`, `failed`,
+   `canceled`, `rejected` — or after a single direct `Message`
+   ([ADR-0017](decisions/0017-streams-terminate-at-task-terminal.md)). An
+   interrupted state (`input_required`, `auth_required`) does not close the
+   stream. A client disconnect simply unsubscribes; because the execution process
+   is independent of the consumer, the task keeps running and can be re-attached
+   via `resubscribe`.
 
 No async-generator `.return()`/`finally` dance is needed (the source of much
 complexity in the JS SDK) — unsubscribing is all that a disconnect requires.
+
+### Tune `stream_idle_timeout` for your infrastructure
+
+Because a stream now stays open across interrupted states, an SSE connection to a
+task parked awaiting input writes nothing until the client answers. Nothing else
+bounds it: `A2A.Plug.SSE` can only notice a disconnect when it next calls
+`Plug.Conn.chunk/2`, and **heartbeat frames are not implemented** — there is no
+periodic `: ping` keeping the socket warm. The only bound is
+`stream_idle_timeout` on `A2A.Server.Supervisor`, which defaults to `300_000`
+(5 minutes).
+
+Most reverse proxies and load balancers drop an idle connection well inside five
+minutes (nginx's `proxy_read_timeout` is 60s by default; several cloud load
+balancers use 60s too). A host behind one should set `stream_idle_timeout`
+**below** that cutoff, so the SDK closes the stream itself — cleanly, and with the
+subscription released — instead of the client discovering a socket the proxy
+already reset. Both example agents set `30_000` for exactly this reason.
 
 ## Transport selection & the agent card
 
