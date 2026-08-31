@@ -17,7 +17,8 @@ defmodule EchoServer.MixProject do
   defp deps do
     [
       {:a2a, path: "../.."},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:req, "~> 0.7"}
     ]
   end
 end
