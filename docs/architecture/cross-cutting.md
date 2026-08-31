@@ -102,6 +102,7 @@ Rendering:
   | `:extended_agent_card_not_configured` | `-32007` |
   | `:extension_support_required` | `-32008` |
   | `:version_not_supported` | `-32009` |
+  | `:method_not_found` (an unrouted path) | `-32601` |
   | `:invalid_params` | `-32602` |
   | internal / timeout / unmapped | `-32603` |
 
@@ -127,6 +128,7 @@ Rendering:
   | `:task_not_cancelable` | `409` |
   | `:content_type_not_supported` | `415` |
   | `:invalid_agent_response` | `502` |
+  | `:method_not_found` | `404` |
   | `:unsupported_operation` / `:task_not_continuable` / `:task_in_progress` / `:push_notification_not_supported` / `:extended_agent_card_not_configured` / `:extension_support_required` / `:version_not_supported` / `:invalid_params` | `400` |
   | internal / unmapped | `500` |
   | `:timeout` | `504` |

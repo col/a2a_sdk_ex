@@ -104,6 +104,7 @@ defmodule A2A.Error do
       grpc: "UNIMPLEMENTED",
       reason: "VERSION_NOT_SUPPORTED"
     },
+    method_not_found: %{jsonrpc: -32_601, http: 404, grpc: "NOT_FOUND", reason: nil},
     invalid_params: %{jsonrpc: -32_602, http: 400, grpc: "INVALID_ARGUMENT", reason: nil},
     timeout: %{jsonrpc: -32_603, http: 504, grpc: "DEADLINE_EXCEEDED", reason: nil},
     internal_error: %{jsonrpc: -32_603, http: 500, grpc: "INTERNAL", reason: nil}

@@ -69,7 +69,7 @@ Routes exposed today:
 | `GET /tasks/:id` | REST: `GetTask` (`application/json`) | below |
 | `GET /tasks` | REST: `ListTasks` (`application/json`) | below |
 | `POST /tasks/:id:cancel` | REST: `CancelTask` (`application/json`) | below |
-| `GET /tasks/:id:subscribe` | REST: `SubscribeToTask` (SSE) | below |
+| `GET`/`POST` `/tasks/:id:subscribe` | REST: `SubscribeToTask` (SSE) | below |
 | `POST /tasks/:task_id/pushNotificationConfigs` | REST: `CreateTaskPushNotificationConfig` (`application/json`) | below |
 | `GET /tasks/:task_id/pushNotificationConfigs` | REST: `ListTaskPushNotificationConfigs` (`application/json`) | below |
 | `GET /tasks/:task_id/pushNotificationConfigs/:id` | REST: `GetTaskPushNotificationConfig` (`application/json`) | below |
@@ -142,6 +142,19 @@ render.
   `A2A.Plug.SSE` core as JSON-RPC, via `SSE.respond/4`'s frame-formatter
   argument — REST passes a formatter that emits the bare `StreamResponse`
   ProtoJSON with no JSON-RPC envelope.
+- **`SubscribeToTask` is served on both `GET` and `POST`.** The authorities
+  disagree: spec §11.3.2's URL table lists `POST /tasks/{id}:subscribe`, while
+  the vendored proto annotates the same RPC `get:`. Following ADR-0013's
+  precedent the normative §11 text wins, but the proto form has shipped and
+  costs one route to keep, so both verbs reach the same handler rather than
+  betting on which one a client reads. Serving only `GET` cost three MUST
+  requirements (`STREAM-ORDER-002/003/004`): a conformant client POSTed, got a
+  404, and reported it as "stream received no events".
+- **An unrouted path renders an AIP-193 404**, like every other error, rather
+  than an empty body. An empty-bodied refusal tells a client nothing and reads
+  as a transport fault — which is exactly how the routing gap above was
+  misdiagnosed. The code is `:method_not_found`, a standard JSON-RPC error, so
+  it carries no `ErrorInfo`.
 - One wire nuance: Plug's router treats a mid-segment `:` as a dynamic-param
   marker, so the proto's literal `:send`/`:stream` suffixes are written
   escaped in the router (`post "/message\:send"`), and `:cancel`/`:subscribe`

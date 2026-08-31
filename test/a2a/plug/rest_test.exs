@@ -10,13 +10,17 @@ defmodule A2A.Plug.RESTTest do
 
   @card %AgentCard{name: "Echo", version: "0.1.0", default_input_modes: ["text/plain"]}
 
-  setup do
+  # `@tag executor: SomeExecutor` swaps the agent for one test. The router
+  # resolves the server by name per request, so the executor cannot be overridden
+  # per call the way handler tests do it — and the globally-named TaskStore.ETS
+  # rules out running a second tree alongside this one.
+  setup context do
     name = :"srv_rest_#{System.unique_integer([:positive])}"
     pubsub = :"pubsub_rest_#{System.unique_integer([:positive])}"
+    executor = Map.get(context, :executor, A2A.Test.EchoExecutor)
 
     start_supervised!(
-      {ServerSupervisor,
-       name: name, executor: A2A.Test.EchoExecutor, pubsub: pubsub, agent_card: @card}
+      {ServerSupervisor, name: name, executor: executor, pubsub: pubsub, agent_card: @card}
     )
 
     :ets.delete_all_objects(TaskStoreETS)
@@ -135,6 +139,31 @@ defmodule A2A.Plug.RESTTest do
 
     assert get_resp_header(conn, "content-type") |> hd() =~ "text/event-stream"
     refute conn.resp_body =~ "jsonrpc"
+  end
+
+  # Spec 11.3.2 lists `POST /tasks/{id}:subscribe`; the vendored proto annotates
+  # the same operation `get:`. The two disagree, so both verbs are served.
+  @tag executor: A2A.Test.AuthThenInputExecutor
+  test "POST /tasks/:id:subscribe subscribes like the GET form", %{opts: opts} do
+    # A task left in `input_required` is non-terminal, so subscribing is valid.
+    id = create_task(opts)
+
+    conn =
+      conn(:post, "/tasks/#{id}:subscribe")
+      |> put_req_header("content-type", "application/json")
+      |> call(opts)
+
+    assert conn.status == 200
+    assert get_resp_header(conn, "content-type") |> hd() =~ "text/event-stream"
+    assert conn.resp_body =~ "TASK_STATE_INPUT_REQUIRED"
+    refute conn.resp_body =~ "jsonrpc"
+  end
+
+  test "an unrouted path renders an AIP-193 404, not an empty body", %{opts: opts} do
+    conn = call(conn(:get, "/nope"), opts)
+
+    assert conn.status == 404
+    assert %{"error" => %{"code" => 404, "status" => "NOT_FOUND"}} = Jason.decode!(conn.resp_body)
   end
 
   test "GET /tasks/:id:subscribe on a terminal task -> 400 UNSUPPORTED_OPERATION",

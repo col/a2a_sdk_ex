@@ -43,7 +43,9 @@ bindings refuse the same requests; lenient about absence, strict about
 disagreement; agent-card discovery exempt), plus an optional `A2A.Standalone`
 (Bandit-backed) for running without a host web framework. All six operations are wired on
 both bindings — `SendMessage`, `SendStreamingMessage`, `GetTask`,
-`CancelTask`, `ListTasks`, `SubscribeToTask` — rendered via
+`CancelTask`, `ListTasks`, `SubscribeToTask` (REST serves that last one on
+**both `GET` and `POST`**: spec §11.3.2 says `POST`, the vendored proto
+annotates it `get:`, and both ship) — rendered via
 `A2A.Error.to_jsonrpc/1` (JSON-RPC) or `A2A.Error.to_rest/1` (REST, AIP-193
 body), two projections of one error-code table — spec §5.4 verbatim since
 ADR-0013, with A2A-specific errors carrying a `google.rpc.ErrorInfo` in the

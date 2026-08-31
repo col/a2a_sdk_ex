@@ -137,12 +137,7 @@ defmodule A2A.Plug.Router do
     server = A2A.Server.handle(conn.assigns.init_opts[:server])
 
     if String.ends_with?(id, ":subscribe") do
-      real = String.replace_suffix(id, ":subscribe", "")
-
-      case REST.subscribe(server, real) do
-        {:stream, enum} -> SSE.respond(conn, nil, enum, &REST.frame/2)
-        other -> render_rest(conn, other)
-      end
+      subscribe(conn, server, String.replace_suffix(id, ":subscribe", ""))
     else
       render_rest(conn, REST.get_task(server, id))
     end
@@ -151,17 +146,42 @@ defmodule A2A.Plug.Router do
   post "/tasks/:id" do
     server = A2A.Server.handle(conn.assigns.init_opts[:server])
 
-    if String.ends_with?(id, ":cancel") do
-      real = String.replace_suffix(id, ":cancel", "")
-      {:ok, body, conn} = read_body(conn)
-      render_rest(conn, REST.cancel_task(server, real, decode_body(body)))
-    else
-      send_resp(conn, 404, "")
+    cond do
+      String.ends_with?(id, ":cancel") ->
+        real = String.replace_suffix(id, ":cancel", "")
+        {:ok, body, conn} = read_body(conn)
+        render_rest(conn, REST.cancel_task(server, real, decode_body(body)))
+
+      # Spec 11.3.2 lists `POST /tasks/{id}:subscribe`, while the vendored proto
+      # annotates the same operation `get:`. The two authorities disagree, so both
+      # verbs are served rather than guessing which one a client will use.
+      String.ends_with?(id, ":subscribe") ->
+        subscribe(conn, server, String.replace_suffix(id, ":subscribe", ""))
+
+      true ->
+        not_found(conn)
     end
   end
 
   match _ do
-    send_resp(conn, 404, "")
+    not_found(conn)
+  end
+
+  defp subscribe(conn, server, task_id) do
+    case REST.subscribe(server, task_id) do
+      {:stream, enum} -> SSE.respond(conn, nil, enum, &REST.frame/2)
+      other -> render_rest(conn, other)
+    end
+  end
+
+  # An unrouted path is still an A2A error, and renders like one. An empty-bodied
+  # 404 tells a client nothing, and reads as a transport fault rather than a
+  # refusal — which is exactly how it was misdiagnosed once already.
+  defp not_found(conn) do
+    render_service_error(conn, %A2A.Error{
+      code: :method_not_found,
+      message: "no A2A route matches #{conn.method} #{conn.request_path}"
+    })
   end
 
   defp send_json(conn, status, map) do
