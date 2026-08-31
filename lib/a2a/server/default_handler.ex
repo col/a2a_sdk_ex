@@ -61,7 +61,7 @@ defmodule A2A.Server.DefaultHandler do
     context_id = message.context_id || server.id_generator.()
     timeout = Keyword.get(opts, :drain_timeout, server.drain_timeout)
 
-    with :ok <- reject_terminal(server, task_id) do
+    with :ok <- resolve_task(server, message.task_id) do
       ctx = build_context(message, task_id, context_id, req)
       maybe_register_inline_push(server, task_id, req)
       :ok = Events.subscribe(server.pubsub, task_id)
@@ -126,7 +126,7 @@ defmodule A2A.Server.DefaultHandler do
     task_id = message.task_id || server.id_generator.()
     context_id = message.context_id || server.id_generator.()
 
-    with :ok <- reject_terminal(server, task_id) do
+    with :ok <- resolve_task(server, message.task_id) do
       ctx = build_context(message, task_id, context_id, req)
       maybe_register_inline_push(server, task_id, req)
       :ok = Events.subscribe(server.pubsub, task_id)
@@ -178,6 +178,26 @@ defmodule A2A.Server.DefaultHandler do
         {:error, A2A.Error.not_found(task_id)}
 
       {:ok, %Task{} = task} ->
+        subscribe_live(server, task_id, task)
+    end
+  end
+
+  # Spec 3.1.6: SubscribeToTask "returns UnsupportedOperationError if the task is
+  # in a terminal state". A snapshot-only stream is not a substitute — the
+  # subscriber cannot distinguish it from a task that is merely quiet.
+  defp subscribe_live(server, task_id, %Task{} = task) do
+    case ResultAssembler.terminal?(task) do
+      true ->
+        Events.unsubscribe(server.pubsub, task_id)
+
+        {:error,
+         %A2A.Error{
+           code: :unsupported_operation,
+           message: "task is in a terminal state and cannot be subscribed to: #{task_id}",
+           data: %{task_id: task_id}
+         }}
+
+      false ->
         {snapshot_task, live} = resubscribe_attach(server, task_id, task)
         {:ok, Stream.concat([StreamResponse.task(snapshot_task)], live)}
     end
@@ -270,7 +290,13 @@ defmodule A2A.Server.DefaultHandler do
     end
   end
 
-  defp reject_terminal(server, task_id) do
+  # Spec 3.4.2: task ids are server-generated, and "client-provided taskId values
+  # for creating new tasks is NOT supported". So an absent taskId means "create",
+  # and a supplied one MUST reference an existing, non-terminal task — an unknown
+  # id is TaskNotFound rather than an implicit create.
+  defp resolve_task(_server, nil), do: :ok
+
+  defp resolve_task(server, task_id) do
     case server.store.get(task_id, server.scope) do
       {:ok, task} ->
         if ResultAssembler.terminal?(task),
@@ -278,7 +304,7 @@ defmodule A2A.Server.DefaultHandler do
           else: :ok
 
       {:error, :not_found} ->
-        :ok
+        {:error, A2A.Error.not_found(task_id)}
     end
   end
 

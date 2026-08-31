@@ -15,10 +15,36 @@ defmodule A2A.Plug.Router do
   """
   use Plug.Router, copy_opts_to_assign: :init_opts
 
-  alias A2A.Plug.{JSONRPC, REST, SSE}
+  alias A2A.Plug.{JSONRPC, REST, ServiceParams, SSE}
 
   plug(:match)
+  plug(:validate_service_params)
   plug(:dispatch)
+
+  # Service parameters are validated once, before dispatch, so both bindings
+  # refuse the same requests (A2A.Plug.ServiceParams). Agent-card discovery is
+  # exempt: a client has to read the card to learn which versions an agent
+  # speaks, so gating it on the version would be circular.
+  defp validate_service_params(%Plug.Conn{path_info: [".well-known" | _]} = conn, _opts), do: conn
+
+  defp validate_service_params(conn, _opts) do
+    case ServiceParams.check(conn) do
+      :ok -> conn
+      {:error, error} -> conn |> render_service_error(error) |> halt()
+    end
+  end
+
+  # `POST /` is the JSON-RPC binding; every other route is REST. The refusal
+  # happens before the envelope is parsed, so there is no request id to echo —
+  # JSON-RPC 2.0 uses a null id when it cannot be determined.
+  defp render_service_error(%Plug.Conn{path_info: []} = conn, error) do
+    send_json(conn, 200, %{"jsonrpc" => "2.0", "id" => nil, "error" => A2A.Error.to_jsonrpc(error)})
+  end
+
+  defp render_service_error(conn, error) do
+    {status, body} = A2A.Error.to_rest(error)
+    send_a2a(conn, status, body)
+  end
 
   get "/.well-known/agent-card.json" do
     server = A2A.Server.handle(conn.assigns.init_opts[:server])

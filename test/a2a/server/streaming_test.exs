@@ -83,20 +83,14 @@ defmodule A2A.Server.StreamingTest do
     assert List.last(states) == :input_required
   end
 
-  test "resubscribe on a finished task returns snapshot-only", %{server: server} do
-    {:ok, _} = DefaultHandler.send_message(server, req("hi", task_id: "done1"))
+  test "resubscribe on a finished task is rejected", %{server: server} do
+    # Spec 3.1.6: SubscribeToTask "returns UnsupportedOperationError if the task
+    # is in a terminal state" — a snapshot-only stream is not a substitute, since
+    # a subscriber cannot tell it apart from a task that is merely quiet.
+    {:ok, %A2A.Types.Task{id: id}} = DefaultHandler.send_message(server, req("hi"))
 
-    assert {:ok, stream} =
-             DefaultHandler.resubscribe(server, %A2A.Types.SubscribeToTaskRequest{id: "done1"})
-
-    frames = Enum.to_list(stream)
-
-    assert [
-             %A2A.Types.StreamResponse{
-               kind: :task,
-               task: %A2A.Types.Task{id: "done1", status: %{state: :completed}}
-             }
-           ] = frames
+    assert {:error, %A2A.Error{code: :unsupported_operation}} =
+             DefaultHandler.resubscribe(server, %A2A.Types.SubscribeToTaskRequest{id: id})
   end
 
   test "resubscribe on an unknown task returns not_found", %{server: server} do
@@ -106,12 +100,15 @@ defmodule A2A.Server.StreamingTest do
 
   test "resubscribe on a live task yields snapshot then subsequent live frames",
        %{server: server} do
-    server = %{server | executor: GatedExecutor}
+    # The GatedExecutor is keyed by task id and the test must know it up front,
+    # so the id is pinned through the server's generator rather than by sending
+    # a client-supplied taskId, which spec 3.4.2 forbids for task creation.
+    server = %{server | executor: GatedExecutor, id_generator: fn -> "live1" end}
     caller = self()
 
     # Start a streaming send that will pause after start_work until released.
     spawn_link(fn ->
-      stream = DefaultHandler.send_message_stream(server, req("go", task_id: "live1"))
+      stream = DefaultHandler.send_message_stream(server, req("go"))
       send(caller, {:frames, Enum.to_list(stream)})
     end)
 

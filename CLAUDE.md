@@ -37,8 +37,11 @@ The **HTTP transport** has landed for both bindings (ADR-0010, ADR-0011):
 decode/dispatch) + `A2A.Plug.REST` (REST transport mechanics — path/query/body
 → typed request via `A2A.JSON`, `application/json` responses) +
 `A2A.Plug.SSE` (streaming responses, shared by both bindings via a
-frame-formatter argument), plus an optional `A2A.Standalone` (Bandit-backed)
-for running without a host web framework. All six operations are wired on
+frame-formatter argument) + `A2A.Plug.ServiceParams` (ADR-0014: `A2A-Version`
+and request media type, validated as a router plug **before** dispatch so both
+bindings refuse the same requests; lenient about absence, strict about
+disagreement; agent-card discovery exempt), plus an optional `A2A.Standalone`
+(Bandit-backed) for running without a host web framework. All six operations are wired on
 both bindings — `SendMessage`, `SendStreamingMessage`, `GetTask`,
 `CancelTask`, `ListTasks`, `SubscribeToTask` — rendered via
 `A2A.Error.to_jsonrpc/1` (JSON-RPC) or `A2A.Error.to_rest/1` (REST, AIP-193
@@ -114,6 +117,10 @@ track the gap, not gate on it.
   then return a lazy stream whose `receive` runs at enumeration time — enumerate
   it elsewhere and PubSub events land in the wrong mailbox; never enumerate it and
   the subscription leaks until the process dies. (Documented on both functions.)
+- **Task ids are server-generated** (spec §3.4.2, ADR-0014). A `Message` naming a
+  `taskId` that does not exist is `TaskNotFound`, *not* an implicit create — so a
+  test that needs a predictable id pins `server.id_generator` (`server = %{server
+  | id_generator: fn -> "t1" end}`) rather than setting `message.task_id`.
 - **Deferred (known-minor):** blocking `resolve_blocking` returns error code
   `:timeout` for *any* terminal-less end, including an executor that exits
   (`:DOWN`) without emitting a terminal. Distinguishing idle-timeout from `:DOWN`

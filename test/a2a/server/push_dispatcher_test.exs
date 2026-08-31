@@ -32,23 +32,29 @@ defmodule A2A.Server.PushDispatcherTest do
     %{server: A2A.Server.handle(name)}
   end
 
-  defp send_req(task_id, cfg) do
+  defp send_req(cfg) do
     %SendMessageRequest{
       message: %Message{
         message_id: "m_#{System.unique_integer([:positive])}",
         role: :user,
-        task_id: task_id,
         parts: [Part.text("hi")]
       },
       configuration: %SendMessageConfiguration{task_push_notification_config: cfg}
     }
   end
 
+  defp send_req, do: send_req(nil)
+
+  # Spec 3.4.2 forbids a client-supplied taskId for creating a task, so tests
+  # that need to know the id up front (to register a config against it, or to
+  # look up its dispatcher) pin the server's generator instead.
+  defp with_id(server, task_id), do: %{server | id_generator: fn -> task_id end}
+
   test "inline config: dispatcher POSTs each task event to the webhook (in order)", %{
     server: server
   } do
     cfg = %TaskPushNotificationConfig{url: "https://h/cb", token: "t"}
-    {:ok, _task} = DefaultHandler.send_message(server, send_req("task-1", cfg))
+    {:ok, _task} = DefaultHandler.send_message(with_id(server, "task-1"), send_req(cfg))
 
     frames = collect_pushes([])
     # EchoExecutor emits: working (status) → artifact → completed (status)
@@ -78,14 +84,7 @@ defmodule A2A.Server.PushDispatcherTest do
     end
 
     {:ok, _task} =
-      DefaultHandler.send_message(server, %SendMessageRequest{
-        message: %Message{
-          message_id: "m_#{System.unique_integer([:positive])}",
-          role: :user,
-          task_id: task_id,
-          parts: [Part.text("hi")]
-        }
-      })
+      DefaultHandler.send_message(with_id(server, task_id), send_req())
 
     # Only the normal (non-raising) config forwards {:push, ...}.
     normal_frames = for {:push, %{url: "https://ok/cb"}, frame} <- collect_all_pushes([]), do: frame
@@ -106,7 +105,9 @@ defmodule A2A.Server.PushDispatcherTest do
   } do
     server = %{server | push_timeout: :infinity}
     cfg = %TaskPushNotificationConfig{url: "https://h/cb", token: "t"}
-    {:ok, _task} = DefaultHandler.send_message(server, send_req("task-infinite-timeout", cfg))
+
+    {:ok, _task} =
+      DefaultHandler.send_message(with_id(server, "task-infinite-timeout"), send_req(cfg))
 
     frames = collect_pushes([])
     assert Enum.any?(frames, &match?(%StreamResponse{kind: :status_update}, &1))
@@ -120,7 +121,7 @@ defmodule A2A.Server.PushDispatcherTest do
     cfg = %TaskPushNotificationConfig{url: "https://h/cb", token: "t"}
 
     assert {:ok, %Task{} = task} =
-             DefaultHandler.send_message(server, send_req("task-raising-store", cfg))
+             DefaultHandler.send_message(with_id(server, "task-raising-store"), send_req(cfg))
 
     assert task.status.state == :completed
   end
@@ -129,7 +130,7 @@ defmodule A2A.Server.PushDispatcherTest do
     cfg = %TaskPushNotificationConfig{url: "ftp://nope", token: "t"}
 
     assert {:ok, %Task{} = task} =
-             DefaultHandler.send_message(server, send_req("task-badurl", cfg))
+             DefaultHandler.send_message(with_id(server, "task-badurl"), send_req(cfg))
 
     assert task.status.state == :completed
   end
@@ -154,14 +155,7 @@ defmodule A2A.Server.PushDispatcherTest do
     end
 
     {:ok, _task} =
-      DefaultHandler.send_message(server, %SendMessageRequest{
-        message: %Message{
-          message_id: "m_#{System.unique_integer([:positive])}",
-          role: :user,
-          task_id: task_id,
-          parts: [Part.text("hi")]
-        }
-      })
+      DefaultHandler.send_message(with_id(server, task_id), send_req())
 
     deliveries = collect_deliveries([])
 

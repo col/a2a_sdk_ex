@@ -107,6 +107,19 @@ split that keeps server deps out of the graph for consumers who don't need them.
 ## REST (HTTP+JSON) binding — **landed**
 
 Landed per [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md) —
+### Service parameters
+
+`A2A.Plug.ServiceParams` validates the parameters both bindings share (spec
+§3.2.6) — the `A2A-Version` the client is speaking and the request media type —
+as a router plug between `:match` and `:dispatch`, so a refusal is identical
+across bindings apart from its rendering. The checks are lenient about absence
+and strict about disagreement: an unstated version or media type is taken to be
+the one this SDK implements, and only a conflicting value is refused. Versions
+match on `Major.Minor` and may arrive as a header or an `A2A-Version` query
+parameter; agent-card discovery is exempt, since a client reads the card to
+learn which versions the agent speaks. See
+[ADR-0014](decisions/0014-request-validation-and-task-id-semantics.md).
+
 `A2A.Plug.REST` is the transport-mechanics twin of `A2A.Plug.JSONRPC`: build a
 typed request from path params + query + body via `A2A.JSON`, call
 `A2A.Server.DefaultHandler`, and tag the result for `A2A.Plug.Router` to

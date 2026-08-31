@@ -19,13 +19,16 @@ defmodule A2A.Server.CancelTaskTest do
   end
 
   test "cancels a live task -> :canceled terminal", %{server: server} do
-    server = %{server | executor: GatedExecutor}
+    # The GatedExecutor and the cancel below are keyed by task id, so the id is
+    # pinned through the server's generator — spec 3.4.2 forbids a client-supplied
+    # taskId for creating a task.
+    server = %{server | executor: GatedExecutor, id_generator: fn -> "cid" end}
     caller = self()
 
     # Start a streaming send so the task runs concurrently (GatedExecutor blocks
     # after start_work until released) while we cancel it from this process.
     spawn_link(fn ->
-      stream = DefaultHandler.send_message_stream(server, req("go", task_id: "cid"))
+      stream = DefaultHandler.send_message_stream(server, req("go"))
       send(caller, {:frames, Enum.to_list(stream)})
     end)
 
@@ -40,7 +43,8 @@ defmodule A2A.Server.CancelTaskTest do
   end
 
   test "already-terminal task -> task_not_cancelable", %{server: server} do
-    {:ok, _} = DefaultHandler.send_message(server, req("hi", task_id: "done1"))
+    server = %{server | id_generator: fn -> "done1" end}
+    {:ok, _} = DefaultHandler.send_message(server, req("hi"))
 
     assert {:error, %A2A.Error{code: :task_not_cancelable}} =
              DefaultHandler.cancel_task(server, %CancelTaskRequest{id: "done1"})
@@ -60,8 +64,10 @@ defmodule A2A.Server.CancelTaskTest do
     # process has already deregistered (cancel_not_live) or is still live is a race;
     # both branches must yield the same result. Loop a few immediate cancels to make
     # it likely we hit the still-live branch at least once.
+    server = %{server | id_generator: fn -> "race1" end}
+
     {:ok, %{status: %{state: :completed}}} =
-      DefaultHandler.send_message(server, req("hi", task_id: "race1"))
+      DefaultHandler.send_message(server, req("hi"))
 
     for _ <- 1..5 do
       assert {:error, %A2A.Error{code: :task_not_cancelable}} =
@@ -72,7 +78,7 @@ defmodule A2A.Server.CancelTaskTest do
              DefaultHandler.get_task(server, %A2A.Types.GetTaskRequest{id: "race1"})
   end
 
-  defp req(text, opts) do
+  defp req(text, opts \\ []) do
     %SendMessageRequest{
       message: %Message{
         message_id: "m_#{System.unique_integer([:positive])}",

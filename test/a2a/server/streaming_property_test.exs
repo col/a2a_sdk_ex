@@ -30,13 +30,13 @@ defmodule A2A.Server.StreamingPropertyTest do
       task_id = "prop_#{System.unique_integer([:positive])}"
       :ok = ReplayExecutor.load(task_id, events)
 
+      # The ReplayExecutor is keyed by task id, so the id is pinned through the
+      # server's generator — spec 3.4.2 forbids a client-supplied taskId for
+      # creating a task.
+      server = %{server | id_generator: fn -> task_id end}
+
       req = %SendMessageRequest{
-        message: %Message{
-          message_id: "m_#{task_id}",
-          role: :user,
-          task_id: task_id,
-          parts: [Part.text("go")]
-        }
+        message: %Message{message_id: "m_#{task_id}", role: :user, parts: [Part.text("go")]}
       }
 
       frames = server |> DefaultHandler.send_message_stream(req) |> Enum.to_list()

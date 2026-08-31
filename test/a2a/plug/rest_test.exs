@@ -117,11 +117,36 @@ defmodule A2A.Plug.RESTTest do
     assert conn.status == 404
   end
 
-  test "GET /tasks/:id:subscribe streams SSE with bare StreamResponse frames", %{opts: opts} do
+  test "POST /message:stream streams SSE with bare StreamResponse frames", %{opts: opts} do
+    body =
+      Jason.encode!(%{
+        "message" =>
+          A2A.JSON.to_json_map(%Message{
+            message_id: "m_stream",
+            role: :user,
+            parts: [Part.text("hi")]
+          })
+      })
+
+    conn =
+      conn(:post, "/message:stream", body)
+      |> put_req_header("content-type", "application/json")
+      |> call(opts)
+
+    assert get_resp_header(conn, "content-type") |> hd() =~ "text/event-stream"
+    refute conn.resp_body =~ "jsonrpc"
+  end
+
+  test "GET /tasks/:id:subscribe on a terminal task -> 400 UNSUPPORTED_OPERATION",
+       %{opts: opts} do
+    # Spec 3.1.6: subscribing to a task that has already reached a terminal state
+    # is UnsupportedOperationError, not an empty stream.
     id = create_task(opts)
 
     conn = call(conn(:get, "/tasks/#{id}:subscribe"), opts)
-    assert get_resp_header(conn, "content-type") |> hd() =~ "text/event-stream"
-    refute conn.resp_body =~ "jsonrpc"
+
+    assert conn.status == 400
+    assert %{"error" => %{"details" => [detail]}} = Jason.decode!(conn.resp_body)
+    assert detail["reason"] == "UNSUPPORTED_OPERATION"
   end
 end
