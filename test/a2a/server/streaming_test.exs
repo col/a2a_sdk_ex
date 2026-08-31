@@ -42,6 +42,18 @@ defmodule A2A.Server.StreamingTest do
              DefaultHandler.send_message(server, req("x"), drain_timeout: 50)
   end
 
+  test "blocking send_message returns at auth_required, not just input_required",
+       %{server: server} do
+    # §3.2.2: a blocking send waits for a terminal state OR an interrupted state
+    # (`input_required`, `auth_required`). The finite drain_timeout is the trap:
+    # if auth_required is not treated as interrupted, this hangs and then fails
+    # with :timeout rather than returning the task.
+    server = %{server | executor: A2A.Test.AuthOnlyExecutor}
+
+    assert {:ok, %A2A.Types.Task{status: %{state: :auth_required}}} =
+             DefaultHandler.send_message(server, req("go"), drain_timeout: 1_000)
+  end
+
   test "send_message_stream yields ordered StreamResponse frames ending in completed",
        %{server: server} do
     frames = server |> DefaultHandler.send_message_stream(req("hi")) |> Enum.to_list()

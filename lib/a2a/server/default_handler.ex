@@ -40,7 +40,9 @@ defmodule A2A.Server.DefaultHandler do
     StreamResponse,
     SubscribeToTaskRequest,
     Task,
-    TaskPushNotificationConfig
+    TaskPushNotificationConfig,
+    TaskStatus,
+    TaskStatusUpdateEvent
   }
 
   @epoch DateTime.from_unix!(0)
@@ -110,11 +112,23 @@ defmodule A2A.Server.DefaultHandler do
   defp fold_event(%Event{payload: %Message{} = message}, _acc),
     do: {:halt, {:message, message}}
 
-  defp fold_event(%Event{payload: payload, terminal?: true}, {_, acc}),
-    do: {:halt, {:done, ResultAssembler.apply(acc, payload)}}
+  defp fold_event(%Event{payload: payload}, {_, acc}) do
+    task = ResultAssembler.apply(acc, payload)
 
-  defp fold_event(%Event{payload: payload}, {_, acc}),
-    do: {:cont, {:running, ResultAssembler.apply(acc, payload)}}
+    if Events.final?(payload) or interrupted?(payload),
+      do: {:halt, {:done, task}},
+      else: {:cont, {:running, task}}
+  end
+
+  # Spec §3.2.2: a blocking send returns when the task reaches a terminal state OR
+  # an interrupted state (`input_required`, `auth_required`) — the execution stays
+  # alive and the task resumable; only the caller's wait ends. Streams deliberately
+  # do NOT stop here (§3.1.2, §3.1.6), which is why this rule lives in the handler
+  # rather than in `A2A.Server.EventStream`.
+  defp interrupted?(%TaskStatusUpdateEvent{status: %TaskStatus{state: state}}),
+    do: state in [:input_required, :auth_required]
+
+  defp interrupted?(_payload), do: false
 
   @doc """
   Starts (or attaches to) execution and returns a lazy stream of `StreamResponse` frames.

@@ -45,9 +45,12 @@ defmodule A2A.Server.MultiTurnTest do
   end
 
   # Turn one leaves the task in `input_required`, which is non-terminal and so
-  # resumable — the shape every multi-turn exchange starts from.
+  # resumable — the shape every multi-turn exchange starts from. Uses
+  # InputRequiredExecutor rather than AuthThenInputExecutor: since §3.2.2 a
+  # blocking send now also returns at `auth_required` (the interrupted state
+  # that executor emits first), so it would never reach `input_required` here.
   defp open_turn(server, text \\ "turn one") do
-    server = %{server | executor: A2A.Test.AuthThenInputExecutor}
+    server = %{server | executor: A2A.Test.InputRequiredExecutor}
     assert {:ok, %Task{status: %{state: :input_required}} = task} = send_msg(server, req(text))
     task
   end

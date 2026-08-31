@@ -69,6 +69,46 @@ defmodule A2A.Test.AuthThenInputExecutor do
   def cancel(_ctx, _updater), do: :ok
 end
 
+defmodule A2A.Test.InputRequiredExecutor do
+  @moduledoc "Parks at input_required — the resumable shape a multi-turn exchange starts from."
+  @behaviour A2A.Server.AgentExecutor
+  alias A2A.Server.TaskUpdater
+
+  @impl true
+  def execute(_ctx, updater) do
+    updater
+    |> TaskUpdater.start_work()
+    |> TaskUpdater.requires_input()
+
+    :ok
+  end
+
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+end
+
+defmodule A2A.Test.AuthOnlyExecutor do
+  @moduledoc "Parks at auth_required and stays alive — an interrupted, resumable task."
+  @behaviour A2A.Server.AgentExecutor
+  alias A2A.Server.TaskUpdater
+
+  @impl true
+  def execute(_ctx, updater) do
+    updater
+    |> TaskUpdater.start_work()
+    |> TaskUpdater.update_status(:auth_required)
+
+    # Stay alive: `auth_required` means the executor is waiting for out-of-band
+    # credentials, so the execution process must still be running when the
+    # blocking caller returns. Bounded rather than `:infinity` so the unlinked
+    # child does not outlive the test run (and so Dialyzer sees a normal return).
+    Process.sleep(2_000)
+  end
+
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+end
+
 defmodule A2A.Test.BoomExecutor do
   @moduledoc "Raises, to exercise crash → failed."
   @behaviour A2A.Server.AgentExecutor

@@ -5,8 +5,13 @@ defmodule A2A.Server.EventStream do
   the task topic on start, yields each `%A2A.Server.Events.Event{}` envelope in
   publish order, and terminates on the union of three signals (see ADR-0009):
 
-    1. a terminal event (`terminal?: true` — terminal state or `input_required`);
-    2. the monitored execution process going `:DOWN` (deterministic crash/exit);
+    1. a **final** event — one whose payload closes a stream per
+       `A2A.Server.Events.final?/1`: a terminal task state (§3.1.2, §3.1.6) or a
+       direct `Message` reply. Interrupted states (`input_required`,
+       `auth_required`) do NOT end the stream; the blocking caller's own fold
+       stops on those (§3.2.2);
+    2. the monitored execution process going `:DOWN` — opt-in via `:monitor`, and
+       passed only by the blocking drain (a stream outlives any single turn);
     3. an idle timeout (`:infinity` disables it; defense-in-depth for a silent hang).
 
   It always unsubscribes on halt and demonitors if it monitored. Yields the
@@ -40,9 +45,13 @@ defmodule A2A.Server.EventStream do
 
   defp next(%{ref: ref} = acc, timeout) do
     receive do
-      %Event{terminal?: true} = e -> {[e], %{acc | halted?: true}}
-      %Event{} = e -> {[e], acc}
-      {:DOWN, ^ref, :process, _pid, _reason} -> {:halt, acc}
+      %Event{payload: payload} = e ->
+        if Events.final?(payload),
+          do: {[e], %{acc | halted?: true}},
+          else: {[e], acc}
+
+      {:DOWN, ^ref, :process, _pid, _reason} ->
+        {:halt, acc}
     after
       timeout -> {:halt, acc}
     end
