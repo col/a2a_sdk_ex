@@ -76,6 +76,14 @@ Full context and consequences for each: [decision records](docs/architecture/dec
 - **[Architecture overview](docs/architecture.md)** — the high-level map: components, boundaries, invariants.
 - Detailed docs under [`docs/architecture/`](docs/architecture/): data model, process model, request handling, transports, streaming & events, persistence, cross-cutting concerns, scope & roadmap.
 
+## Requirements
+
+- **Elixir 1.18+**
+- **Erlang/OTP 26+**
+
+The library is tested in CI across Elixir 1.18 / 1.19 / 1.20, each against the
+lowest OTP it supports at or above the OTP 26 floor.
+
 ## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE).
