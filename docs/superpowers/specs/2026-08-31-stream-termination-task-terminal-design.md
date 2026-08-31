@@ -199,8 +199,11 @@ terminate a stream (unlike other non-working states)"*. Under the new rule
   no longer ends attached streams promptly — they wait out the idle timeout. A
   crashing *executor* is unaffected: `Execution.handle_info/2` (execution.ex:52)
   converts an abnormal child exit into a `failed` terminal broadcast.
-- Push delivery keeps working across a multi-turn task instead of stopping at the
-  first `input_required`.
+- Push delivery survives an `input_required` instead of stopping there — but only
+  within the dispatcher's existing hardcoded 60s idle timeout, and it is (re)started
+  only by `ensure_dispatcher/2` on a config registration. A task parked longer than
+  60s still loses its dispatcher, so a later turn delivers nothing until a config is
+  registered again. Per-turn dispatcher revival is separate work.
 
 ## Testing strategy
 
@@ -243,8 +246,6 @@ with no proto toolchain, and `mix precommit` gates the branch.
   `request-handling.md` (lines ~43, 70, 130) — the state diagram and the
   `requires_auth/2` / `requires_input/2` rows.
 - `CLAUDE.md` — the streaming paragraph and the known-constraints list.
-- `CHANGELOG` entry for the `send_message_stream/2` behaviour change and the new
-  `stream_idle_timeout` option.
 
 ## Out of scope
 

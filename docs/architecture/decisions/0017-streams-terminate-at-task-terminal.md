@@ -64,6 +64,14 @@ singles out `auth_required`, because **only terminal task states terminate a str
   `Execution` converts an abnormal child exit into a `failed` terminal broadcast.
 - Plug-level tests that subscribe to a parked task must pass a short
   `stream_idle_timeout`, since `Plug.Router.call/2` is synchronous.
+- **Push delivery survives an `input_required`, but only within the dispatcher's
+  60s idle window.** `PushDispatcher` no longer stops at the end of a turn, so a
+  client that answers promptly keeps receiving. It is still bounded by its
+  hardcoded 60s idle timeout and is only (re)started by `ensure_dispatcher/2` on a
+  config registration, so a task parked longer than 60s loses its dispatcher and a
+  later turn delivers nothing until a config is registered again. Per-turn
+  dispatcher revival is separate work; a receiver that needs the full history
+  reconciles via `GetTask`.
 
 Supersedes [ADR-0009](0009-eventstream-termination.md) in part: the shared
 `EventStream` primitive, its subscription lifecycle, and the idle-timeout

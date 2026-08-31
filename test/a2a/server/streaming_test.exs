@@ -115,7 +115,7 @@ defmodule A2A.Server.StreamingTest do
     server = %{
       server
       | executor: A2A.Test.AuthThenInputExecutor,
-        stream_idle_timeout: 150
+        stream_idle_timeout: 250
     }
 
     frames = server |> DefaultHandler.send_message_stream(req("go")) |> Enum.to_list()

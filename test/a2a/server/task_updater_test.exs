@@ -16,7 +16,10 @@ defmodule A2A.Server.TaskUpdaterTest do
 
   test "start_work broadcasts a working status and persists", %{updater: u} do
     TaskUpdater.start_work(u)
-    assert_receive %Event{task_id: "t-1"}
+    assert_receive %Event{task_id: "t-1", payload: payload}
+    # `working` is not a stream-closing payload (§3.1.2) — the parity assertion to
+    # the `input_required` and `complete` cases below.
+    refute Events.final?(payload)
     assert {:ok, %{status: %{state: :working}}} = TaskStore.ETS.get("t-1", A2A.Scope.default())
   end
 
