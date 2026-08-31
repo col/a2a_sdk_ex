@@ -3,6 +3,7 @@
 /deps/
 /doc/
 /.elixir_ls/
+/priv/plts/
 erl_crash.dump
 *.ez
 a2a-*.tar

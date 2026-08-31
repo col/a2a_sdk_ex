@@ -8,12 +8,12 @@ defmodule A2A.MixProject do
     [
       app: :a2a,
       version: @version,
-      elixir: "~> 1.14",
+      elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      dialyzer: [plt_add_apps: [:mix]],
+      dialyzer: dialyzer(),
       name: "A2A",
       description: "Elixir SDK for building A2A (Agent2Agent) compliant agents.",
       package: package(),
@@ -27,6 +27,14 @@ defmodule A2A.MixProject do
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
+
+  defp dialyzer do
+    [
+      plt_local_path: "priv/plts",
+      plt_core_path: "priv/plts",
+      plt_add_apps: [:mix, :ex_unit]
+    ]
+  end
 
   defp deps do
     [
