@@ -81,9 +81,10 @@ jobs:
       - run: echo "$HOME/.mix/escripts" >> $GITHUB_PATH
       - run: mix a2a.gen_proto
       - run: mix test --only proto
-  # A2A TCK compliance: runs the official conformance suite against the echo
-  # server. Report-only for now — TCK non-compliance keeps the job GREEN (we are
-  # not compliant yet and don't want a red ✗ on the PR). The job only turns RED
+  # A2A TCK compliance: runs the official conformance suite against the
+  # compliance-server example. Report-only for now — TCK non-compliance keeps
+  # the job GREEN (we are not compliant yet and don't want a red ✗ on the PR).
+  # The job only turns RED
   # if the harness itself breaks (run_tck.sh exits 2/3/4: TCK missing, server
   # won't boot, never ready) — those are real, actionable failures.
   compliance:
@@ -108,7 +109,7 @@ jobs:
           cd ../a2a-tck && uv venv && uv pip install -e .
       - run: mix deps.get
       - run: mix deps.get
-        working-directory: examples/echo_server
+        working-directory: examples/compliance_server
       - name: Run TCK (report-only)
         run: |
           status=0

@@ -67,16 +67,27 @@ and a hung sender is bounded by `push_timeout`. JSON-RPC
 `A2A.Error` when the server wasn't started with push enabled. A host must separately set
 `AgentCard.capabilities.push_notifications = true` to *advertise* support.
 
-`examples/echo_server/` is a minimal runnable agent demonstrating the HTTP
-transport end-to-end. It has its **own `mix.exs`** (path-deps on this repo) and
-runs standalone via `mix run --no-halt` from that directory — it is **not**
-part of this repo's `mix test` or `mix precommit`.
+`examples/` holds two runnable agents. Each has its **own `mix.exs`**
+(path-deps on this repo), runs standalone via `mix run --no-halt` from its own
+directory, and is **not** part of this repo's `mix test` or `mix precommit`.
+
+- **`echo_server/`** — the minimal readable example: echoes text back over both
+  bindings. Keep it small; it is the "how do I write an agent" reference.
+- **`compliance_server/`** — the TCK's System Under Test. Implements the TCK's
+  in-band SUT contract (behaviour selected by the request's `messageId` prefix,
+  transcribed from the TCK's `scenarios/*.feature` into
+  `ComplianceServer.Scenarios`) and advertises streaming **and** push, because
+  the TCK skips whole test classes on unadvertised capabilities. It has its own
+  `mix test`; those tests reuse the tree started by its own application rather
+  than `start_supervised!`-ing a second one (see the global-ETS gotcha below),
+  and `config/test.exs` turns off the HTTP listener so the suite binds no port.
 
 A2A spec conformance is measured with the official
 [TCK](https://github.com/a2aproject/a2a-tck) via `scripts/run_tck.sh` (a
-non-blocking, report-only `compliance` CI job runs it against the echo server on
-every build) — see `docs/tck-compliance.md`. We are **not** compliant yet; the
-harness exists to track the gap, not gate on it.
+non-blocking, report-only `compliance` CI job runs it against
+`examples/compliance_server` on every build; override with `SUT_DIR=`) — see
+`docs/tck-compliance.md`. We are **not** compliant yet; the harness exists to
+track the gap, not gate on it.
 
 ### Known constraints / gotchas (server runtime)
 

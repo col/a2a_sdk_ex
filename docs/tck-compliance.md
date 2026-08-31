@@ -8,14 +8,25 @@ on every build without failing the build.
 
 ## What gets tested
 
-The **System Under Test (SUT)** is the `examples/echo_server` agent, served over
-the JSON-RPC binding on port 5001. The TCK fetches its agent card from
-`/.well-known/agent-card.json` and runs a pytest suite classified by RFC 2119
-level (MUST / SHOULD / MAY).
+The **System Under Test (SUT)** is the `examples/compliance_server` agent,
+served over both the JSON-RPC and HTTP+JSON bindings on port 5002. The TCK
+fetches its agent card from `/.well-known/agent-card.json` and runs a pytest
+suite classified by RFC 2119 level (MUST / SHOULD / MAY).
 
-> The echo server is intentionally minimal, so the score reflects the *example*,
-> not the library's full capability. A dedicated conformance-fixture agent is a
-> planned follow-up.
+That example exists so the score reflects the *library*. The TCK signals the
+behaviour it wants in-band, through the request's `messageId` prefix, and gates
+whole test classes on advertised capabilities — so an agent that ignores those
+prefixes or under-reports its capabilities scores far below what the SDK can
+actually do. `examples/compliance_server` implements the full prefix contract
+and advertises streaming and push; see its README.
+
+Override the SUT with
+`SUT_DIR=examples/echo_server SUT_PORT=5001 scripts/run_tck.sh` to measure the
+minimal example instead — the echo server's port is hard-coded to 5001, so
+`SUT_PORT` has to move with `SUT_DIR`.
+
+> Use `examples/echo_server` as the readable "how do I write an agent" example.
+> Use `examples/compliance_server` for compliance measurement.
 
 ## Pinned TCK version
 
@@ -58,7 +69,7 @@ From the repo root:
 
 ```bash
 mix deps.get
-(cd examples/echo_server && mix deps.get)
+(cd examples/compliance_server && mix deps.get)
 scripts/run_tck.sh
 ```
 
@@ -75,5 +86,5 @@ The `compliance` job in CI runs this same script on every build and uploads
 It is **report-only**: TCK non-compliance keeps the job **green** (we are not
 compliant yet and don't want a red ✗ on the PR). The job only turns **red** if
 the harness itself breaks — i.e. `run_tck.sh` exits `2`/`3`/`4` (TCK checkout
-missing, echo server won't boot, or SUT never becomes ready) — because those are
+missing, the SUT won't boot, or it never becomes ready) — because those are
 real, actionable failures rather than "we're still working towards compliance".
