@@ -474,7 +474,7 @@ defmodule A2A.Server.DefaultHandler do
 
       {:error, _} ->
         # Best-effort: an invalid inline webhook URL is ignored rather than
-        # failing the whole message/send. The config CRUD path validates strictly.
+        # failing the whole SendMessage. The config CRUD path validates strictly.
         :ok
     end
   end
@@ -483,7 +483,7 @@ defmodule A2A.Server.DefaultHandler do
 
   # Best-effort store write for the INLINE registration path only: a custom
   # `push_store.put/2` that raises, exits, or returns something other than `:ok`
-  # must not fail `message/send` (the config CRUD path, `create_push_config/2`,
+  # must not fail `SendMessage` (the config CRUD path, `create_push_config/2`,
   # deliberately lets a store failure surface — this helper is inline-only).
   defp best_effort_put(server, stored) do
     case server.push_store.put(stored, server.scope) do
@@ -511,7 +511,7 @@ defmodule A2A.Server.DefaultHandler do
   end
 
   # Best-effort dispatcher start: a failure to start the delivery process must not
-  # fail config creation (config is persisted) nor the message/send (inline path).
+  # fail config creation (config is persisted) nor the SendMessage (inline path).
   defp ensure_dispatcher(server, task_id) do
     case PushDispatcher.Supervisor.ensure_started(server, task_id) do
       {:ok, _pid} ->

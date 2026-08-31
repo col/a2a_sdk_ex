@@ -14,8 +14,8 @@ designed so it can be added as a third adapter without touching agent code.
 `Plug.Router`), `A2A.Plug.JSONRPC` (envelope decode/dispatch), `A2A.Plug.REST`
 (REST transport mechanics), `A2A.Plug.SSE` (streaming, reused by both
 bindings), the agent-card route, and optional `A2A.Standalone` (Bandit).
-JSON-RPC serves `message/send`, `message/stream`, `tasks/get`,
-`tasks/cancel`, `tasks/list`, `tasks/resubscribe`, and the four
+JSON-RPC serves `SendMessage`, `SendStreamingMessage`, `GetTask`,
+`CancelTask`, `ListTasks`, `SubscribeToTask`, and the four
 push-notification-config methods; REST serves the same operations over
 resource-style routes. `/{tenant}/…` scoping remains deferred (see
 [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md)).
@@ -63,17 +63,17 @@ Routes exposed today:
 | Method & path | Purpose | Doc |
 | --- | --- | --- |
 | `GET /.well-known/agent-card.json` | Serve the `AgentCard` | [Data model](data-model.md) |
-| `POST /` | JSON-RPC endpoint (`message/send`, `message/stream`, `tasks/get`, `tasks/cancel`, `tasks/list`, `tasks/resubscribe`; streaming methods respond as SSE) | below |
-| `POST /message:send` | REST: `message/send` (`application/a2a+json`) | below |
-| `POST /message:stream` | REST: `message/stream` (SSE) | below |
-| `GET /tasks/:id` | REST: `tasks/get` (`application/a2a+json`) | below |
-| `GET /tasks` | REST: `tasks/list` (`application/a2a+json`) | below |
-| `POST /tasks/:id:cancel` | REST: `tasks/cancel` (`application/a2a+json`) | below |
-| `GET /tasks/:id:subscribe` | REST: `tasks/resubscribe` (SSE) | below |
-| `POST /tasks/:task_id/pushNotificationConfigs` | REST: `tasks/pushNotificationConfig/set` (`application/a2a+json`) | below |
-| `GET /tasks/:task_id/pushNotificationConfigs` | REST: `tasks/pushNotificationConfig/list` (`application/a2a+json`) | below |
-| `GET /tasks/:task_id/pushNotificationConfigs/:id` | REST: `tasks/pushNotificationConfig/get` (`application/a2a+json`) | below |
-| `DELETE /tasks/:task_id/pushNotificationConfigs/:id` | REST: `tasks/pushNotificationConfig/delete` (`application/a2a+json`) | below |
+| `POST /` | JSON-RPC endpoint (`SendMessage`, `SendStreamingMessage`, `GetTask`, `CancelTask`, `ListTasks`, `SubscribeToTask`; streaming methods respond as SSE) | below |
+| `POST /message:send` | REST: `SendMessage` (`application/a2a+json`) | below |
+| `POST /message:stream` | REST: `SendStreamingMessage` (SSE) | below |
+| `GET /tasks/:id` | REST: `GetTask` (`application/a2a+json`) | below |
+| `GET /tasks` | REST: `ListTasks` (`application/a2a+json`) | below |
+| `POST /tasks/:id:cancel` | REST: `CancelTask` (`application/a2a+json`) | below |
+| `GET /tasks/:id:subscribe` | REST: `SubscribeToTask` (SSE) | below |
+| `POST /tasks/:task_id/pushNotificationConfigs` | REST: `CreateTaskPushNotificationConfig` (`application/a2a+json`) | below |
+| `GET /tasks/:task_id/pushNotificationConfigs` | REST: `ListTaskPushNotificationConfigs` (`application/a2a+json`) | below |
+| `GET /tasks/:task_id/pushNotificationConfigs/:id` | REST: `GetTaskPushNotificationConfig` (`application/a2a+json`) | below |
+| `DELETE /tasks/:task_id/pushNotificationConfigs/:id` | REST: `DeleteTaskPushNotificationConfig` (`application/a2a+json`) | below |
 
 Routes follow the vendored proto's `google.api.http` annotations exactly — no
 invented `/v1` prefix.
@@ -92,16 +92,16 @@ split that keeps server deps out of the graph for consumers who don't need them.
 - Single `POST /` endpoint (`A2A.Plug.Router`); `A2A.Plug.JSONRPC` decodes the
   envelope, dispatches by JSON-RPC `method` name to the corresponding
   `A2A.Server.DefaultHandler` callback, and re-encodes the result.
-- Ten methods are wired: `message/send`, `message/stream` (unary vs. stream),
-  `tasks/get`, `tasks/cancel`, `tasks/list`, `tasks/resubscribe`, and
-  `tasks/pushNotificationConfig/{set,get,list,delete}`. An unknown method
+- Ten methods are wired: `SendMessage`, `SendStreamingMessage` (unary vs. stream),
+  `GetTask`, `CancelTask`, `ListTasks`, `SubscribeToTask`, and
+  `{Create,Get,List,Delete}TaskPushNotificationConfig`. An unknown method
   renders `-32601`.
 - Requests/responses use the JSON-RPC 2.0 envelope; envelope-level errors
   (parse error `-32700`, invalid request `-32600`, method not found `-32601`,
   invalid params `-32602`) and semantic errors render via
   `A2A.Error.to_jsonrpc/1` (code + message + data). See
   [Cross-cutting concerns](cross-cutting.md#errors).
-- Streaming methods (`message/stream`, `tasks/resubscribe`) respond as
+- Streaming methods (`SendStreamingMessage`, `SubscribeToTask`) respond as
   **Server-Sent Events** via `A2A.Plug.SSE`.
 
 ## REST (HTTP+JSON) binding — **landed**

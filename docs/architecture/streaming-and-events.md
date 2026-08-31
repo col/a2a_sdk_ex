@@ -28,17 +28,17 @@ Every task has a PubSub topic, `"a2a:task:<task_id>"`. The
 subscribes. This single mechanism serves all three delivery paths:
 
 ```
-                    "a2a:task:<task_id>"
-                            │
-        ┌───────────────────┼────────────────────┐
-        ▼                   ▼                     ▼
-   live SSE stream     resubscribe          Push.Sender
-   (message/stream)    (tasks/resubscribe)  (webhook POST)
+                          "a2a:task:<task_id>"
+                                    │
+             ┌──────────────────────┼──────────────────┐
+             ▼                      ▼                  ▼
+      live SSE stream          resubscribe        Push.Sender
+  (SendStreamingMessage)    (SubscribeToTask)   (webhook POST)
 ```
 
 ## Live streaming (SSE)
 
-`message/stream` opens an SSE response that subscribes to the topic and streams
+`SendStreamingMessage` opens an SSE response that subscribes to the topic and streams
 each event as it is published (see [Transports](transports.md#sse-streaming-a2aplugsse)
 for the header-peek and chunking details). At the `DefaultHandler` level, before
 any transport exists, `send_message_stream/2` returns this directly as an
@@ -63,7 +63,7 @@ streaming can share one implementation).
 
 ## Resubscription
 
-`tasks/resubscribe` is simply a new SSE subscription to an **already-live**
+`SubscribeToTask` is simply a new SSE subscription to an **already-live**
 topic. It works because the execution process outlives any single consumer
 (invariant 2 in the [top-level doc](../architecture.md)): a client that dropped
 its stream — or a *different* client entirely — can attach and receive
@@ -90,7 +90,7 @@ Flow:
 
 1. Agent advertises `capabilities.push_notifications = true` on its card.
 2. Client registers a `TaskPushNotificationConfig` (webhook URL + optional
-   token) via `tasks/pushNotificationConfig/set`; it is saved in the
+   token) via `CreateTaskPushNotificationConfig`; it is saved in the
    `PushConfigStore` ([Persistence](persistence.md)).
 3. `A2A.Server.Push.Sender` subscribes to the task topic like any other
    consumer and **POSTs each `StreamResponse`** to the registered URL, including

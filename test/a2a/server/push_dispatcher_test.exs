@@ -114,7 +114,7 @@ defmodule A2A.Server.PushDispatcherTest do
     assert List.last(frames).status_update.status.state == :completed
   end
 
-  test "inline registration is best-effort against a raising push_store.put (message/send still succeeds)",
+  test "inline registration is best-effort against a raising push_store.put (SendMessage still succeeds)",
        %{server: server} do
     server = %{server | push_store: RaisingPushStore}
     cfg = %TaskPushNotificationConfig{url: "https://h/cb", token: "t"}
@@ -125,7 +125,7 @@ defmodule A2A.Server.PushDispatcherTest do
     assert task.status.state == :completed
   end
 
-  test "inline config with an invalid url does not fail message/send", %{server: server} do
+  test "inline config with an invalid url does not fail SendMessage", %{server: server} do
     cfg = %TaskPushNotificationConfig{url: "ftp://nope", token: "t"}
 
     assert {:ok, %Task{} = task} =

@@ -85,7 +85,7 @@ defmodule A2A.Test.RaisingPushStore do
   @moduledoc """
   Test `A2A.Server.PushConfigStore` whose `put/2` always raises — proves the
   INLINE registration path in `DefaultHandler.maybe_register_inline_push/3` is
-  best-effort against a broken store (a raise there must not fail `message/send`).
+  best-effort against a broken store (a raise there must not fail `SendMessage`).
   `get/3`, `list/2`, `delete/3` delegate to the real ETS store so the rest of the
   flow (e.g. dispatcher lookups) behaves normally.
   """

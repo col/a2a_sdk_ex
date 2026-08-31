@@ -32,8 +32,8 @@ ADRs: [0001](decisions/0001-server-first-scope.md),
 ### Must-have — a spec-compliant, genuinely useful agent
 
 - `AgentExecutor` behaviour + `TaskUpdater` ergonomic helper.
-- JSON-RPC + REST request handler: `message/send` (+ streaming SSE),
-  `tasks/get`, `tasks/list`, `tasks/cancel`, `tasks/resubscribe`.
+- JSON-RPC + REST request handler: `SendMessage` (+ streaming SSE),
+  `GetTask`, `ListTasks`, `CancelTask`, `SubscribeToTask`.
 - Agent card served at `/.well-known/agent-card.json`.
 - `TaskState` lifecycle + event model over PubSub.
 - `:telemetry` events for observability.

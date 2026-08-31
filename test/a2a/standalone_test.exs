@@ -34,12 +34,12 @@ defmodule A2A.StandaloneTest do
     assert {:ok, %AgentCard{name: "Echo"}} = A2A.JSON.decode(to_string(body), AgentCard)
   end
 
-  test "handles message/send over real HTTP", %{port: port} do
+  test "handles SendMessage over real HTTP", %{port: port} do
     payload =
       %{
         "jsonrpc" => "2.0",
         "id" => 1,
-        "method" => "message/send",
+        "method" => "SendMessage",
         "params" =>
           A2A.JSON.to_json_map(%SendMessageRequest{
             message: %Message{message_id: "m1", role: :user, parts: [Part.text("hi")]}

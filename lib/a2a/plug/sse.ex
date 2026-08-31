@@ -13,7 +13,7 @@ defmodule A2A.Plug.SSE do
   The PubSub subscription isn't unsubscribed explicitly at that point; it is
   released when the Bandit request process terminates, since Phoenix.PubSub
   auto-unsubscribes a subscriber on its `:DOWN`. The task execution keeps
-  running regardless and is re-attachable via `tasks/resubscribe`.
+  running regardless and is re-attachable via `SubscribeToTask`.
 
   The enumerable is a **single-use live PubSub subscription** — it is
   enumerated exactly once, via the `Enumerable.reduce/3` continuation, so a

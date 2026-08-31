@@ -54,12 +54,12 @@ defmodule A2A.Plug.SSETest do
     |> Router.call(opts)
   end
 
-  test "message/stream yields ordered SSE frames ending in a terminal task", %{opts: opts} do
+  test "SendStreamingMessage yields ordered SSE frames ending in a terminal task", %{opts: opts} do
     req = %SendMessageRequest{
       message: %Message{message_id: "m1", role: :user, parts: [Part.text("hi")]}
     }
 
-    conn = stream_post(opts, "message/stream", req, 5)
+    conn = stream_post(opts, "SendStreamingMessage", req, 5)
 
     assert conn.status == 200
 
@@ -78,7 +78,7 @@ defmodule A2A.Plug.SSETest do
 
   test "resubscribe to an unknown task renders a JSON-RPC error, not a 200 stream", %{opts: opts} do
     req = %SubscribeToTaskRequest{id: "does-not-exist"}
-    conn = stream_post(opts, "tasks/resubscribe", req, 6)
+    conn = stream_post(opts, "SubscribeToTask", req, 6)
 
     assert conn.status == 200
 

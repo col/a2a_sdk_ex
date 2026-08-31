@@ -25,17 +25,21 @@ defmodule A2A.Plug.JSONRPC do
   @type envelope :: %{method: binary(), params: map(), id: term()}
 
   # method => {request module, handler kind}
+  #
+  # Method names are the PascalCase gRPC-style names mandated by A2A v1.0.0
+  # (specification section 5.3, "Method Mapping Reference"). The pre-1.0
+  # slash-delimited names (`message/send`, `tasks/get`, ...) are not accepted.
   @methods %{
-    "message/send" => {SendMessageRequest, :unary},
-    "message/stream" => {SendMessageRequest, :stream},
-    "tasks/get" => {GetTaskRequest, :unary},
-    "tasks/resubscribe" => {SubscribeToTaskRequest, :stream},
-    "tasks/cancel" => {CancelTaskRequest, :unary},
-    "tasks/list" => {ListTasksRequest, :unary},
-    "tasks/pushNotificationConfig/set" => {TaskPushNotificationConfig, :unary},
-    "tasks/pushNotificationConfig/get" => {GetTaskPushNotificationConfigRequest, :unary},
-    "tasks/pushNotificationConfig/list" => {ListTaskPushNotificationConfigsRequest, :unary},
-    "tasks/pushNotificationConfig/delete" => {DeleteTaskPushNotificationConfigRequest, :unary}
+    "SendMessage" => {SendMessageRequest, :unary},
+    "SendStreamingMessage" => {SendMessageRequest, :stream},
+    "GetTask" => {GetTaskRequest, :unary},
+    "SubscribeToTask" => {SubscribeToTaskRequest, :stream},
+    "CancelTask" => {CancelTaskRequest, :unary},
+    "ListTasks" => {ListTasksRequest, :unary},
+    "CreateTaskPushNotificationConfig" => {TaskPushNotificationConfig, :unary},
+    "GetTaskPushNotificationConfig" => {GetTaskPushNotificationConfigRequest, :unary},
+    "ListTaskPushNotificationConfigs" => {ListTaskPushNotificationConfigsRequest, :unary},
+    "DeleteTaskPushNotificationConfig" => {DeleteTaskPushNotificationConfigRequest, :unary}
   }
 
   @spec decode_envelope(binary()) :: {:ok, envelope()} | {:error, map()}
