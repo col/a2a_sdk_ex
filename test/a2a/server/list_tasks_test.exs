@@ -115,7 +115,7 @@ defmodule A2A.Server.ListTasksTest do
   end
 
   test "garbage page_token errors", %{server: server} do
-    assert {:error, %A2A.Error{}} =
+    assert {:error, %A2A.Error{code: :invalid_params}} =
              DefaultHandler.list_tasks(server, %ListTasksRequest{page_token: "!!!not-base64!!!"})
   end
 

@@ -69,18 +69,24 @@ defmodule A2A.Server.Execution do
       {:reply, {:error, A2A.Error.not_cancelable(arg.task_id)},
        %{state | updater: %{updater | task: fresh}}}
     else
-      # Stop the in-flight author work (unlinked child) before settling.
+      # Stop the in-flight author work (unlinked child) SYNCHRONOUSLY before settling,
+      # so the child cannot write a terminal state after we've decided to cancel.
       stop_child(child)
 
-      updater = %{updater | task: fresh || updater.task}
-      updater = maybe_author_cancel(arg, updater)
+      updater = maybe_author_cancel(arg, %{updater | task: fresh || updater.task})
 
-      updater =
-        if ResultAssembler.terminal?(updater.task),
-          do: updater,
-          else: TaskUpdater.update_status(updater, :canceled)
+      # Authoritative: re-read AFTER the child is confirmed dead — the child can no
+      # longer write, so this read is the true final word on terminal-vs-not.
+      final = fresh_task(arg, updater) || updater.task
 
-      {:stop, :normal, {:ok, updater.task}, %{state | updater: updater, child: nil}}
+      if ResultAssembler.terminal?(final) do
+        # Completed/failed during the cancel window — respect it, do not overwrite.
+        {:stop, :normal, {:error, A2A.Error.not_cancelable(arg.task_id)},
+         %{state | updater: %{updater | task: final}, child: nil}}
+      else
+        settled = TaskUpdater.update_status(%{updater | task: final}, :canceled)
+        {:stop, :normal, {:ok, settled.task}, %{state | updater: settled, child: nil}}
+      end
     end
   end
 
@@ -95,8 +101,21 @@ defmodule A2A.Server.Execution do
 
   defp stop_child({pid, ref}) do
     Process.demonitor(ref, [:flush])
-    if Process.alive?(pid), do: Process.exit(pid, :kill)
-    :ok
+
+    if Process.alive?(pid) do
+      m = Process.monitor(pid)
+      Process.exit(pid, :kill)
+
+      receive do
+        {:DOWN, ^m, :process, ^pid, _reason} -> :ok
+      after
+        5_000 ->
+          Process.demonitor(m, [:flush])
+          :ok
+      end
+    else
+      :ok
+    end
   end
 
   defp maybe_author_cancel(arg, updater) do

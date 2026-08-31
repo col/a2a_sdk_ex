@@ -379,7 +379,7 @@ defmodule A2A.Server.DefaultHandler do
          {:ok, ts, _} <- DateTime.from_iso8601(iso) do
       {:ok, {ts, id}}
     else
-      _ -> {:error, %A2A.Error{code: :internal_error, message: "invalid page_token"}}
+      _ -> {:error, %A2A.Error{code: :invalid_params, message: "invalid page_token"}}
     end
   end
 

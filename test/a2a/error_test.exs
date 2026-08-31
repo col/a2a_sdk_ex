@@ -96,5 +96,20 @@ defmodule A2A.ErrorTest do
       assert [detail] = body["details"]
       refute Map.has_key?(detail, "metadata")
     end
+
+    test "invalid_params -> 400 with INVALID_ARGUMENT reason and grpc code 3" do
+      {status, body} = A2A.Error.to_rest(%A2A.Error{code: :invalid_params, message: "bad token"})
+      assert status == 400
+      assert body["code"] == 3
+      assert [detail] = body["details"]
+      assert detail["reason"] == "INVALID_ARGUMENT"
+    end
+  end
+
+  describe "to_jsonrpc/1 invalid_params" do
+    test "maps to -32602" do
+      assert %{"code" => -32_602} =
+               A2A.Error.to_jsonrpc(%A2A.Error{code: :invalid_params, message: "bad token"})
+    end
   end
 end

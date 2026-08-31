@@ -44,6 +44,7 @@ defmodule A2A.Error do
       reason: "PUSH_NOTIFICATION_NOT_SUPPORTED"
     },
     unsupported_operation: %{jsonrpc: -32_004, http: 400, grpc: 12, reason: "UNSUPPORTED_OPERATION"},
+    invalid_params: %{jsonrpc: -32_602, http: 400, grpc: 3, reason: "INVALID_ARGUMENT"},
     content_type_not_supported: %{
       jsonrpc: -32_005,
       http: 400,
