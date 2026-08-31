@@ -34,3 +34,31 @@ jobs:
       - run: echo "$HOME/.mix/escripts" >> $GITHUB_PATH
       - run: mix a2a.gen_proto
       - run: mix test --only proto
+  compliance:
+    runs-on: ubuntu-latest
+    continue-on-error: true          # report-only: never fails the build (yet)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with: {otp-version: "26", elixir-version: "1.16"}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Check out and install the pinned TCK (sibling dir)
+        run: |
+          # TCK_REF is pinned; keep in sync with docs/tck-compliance.md.
+          git clone --depth 1 --branch 1.0.0.alpha2 \
+            https://github.com/a2aproject/a2a-tck.git ../a2a-tck
+          cd ../a2a-tck && uv venv && uv pip install -e .
+      - run: mix deps.get
+      - run: mix deps.get
+        working-directory: examples/echo_server
+      - run: scripts/run_tck.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tck-compliance-report
+          path: reports/
