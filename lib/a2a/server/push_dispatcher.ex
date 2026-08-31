@@ -53,12 +53,17 @@ defmodule A2A.Server.PushDispatcher do
 
   defp dispatch_one(server, task_id, cfg, frame) do
     case server.push_sender.send(cfg, frame, timeout: server.push_timeout) do
-      :ok ->
-        :ok
-
-      {:error, reason} ->
-        Logger.warning("push delivery failed task_id=#{task_id} url=#{cfg.url}: #{inspect(reason)}")
-        :error
+      :ok -> :ok
+      {:error, reason} -> warn(task_id, cfg, reason)
     end
+  rescue
+    e -> warn(task_id, cfg, e)
+  catch
+    kind, reason -> warn(task_id, cfg, {kind, reason})
+  end
+
+  defp warn(task_id, cfg, reason) do
+    Logger.warning("push delivery failed task_id=#{task_id} url=#{cfg.url}: #{inspect(reason)}")
+    :error
   end
 end

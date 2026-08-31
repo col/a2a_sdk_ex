@@ -10,6 +10,8 @@ defmodule A2A.Server.DefaultHandler do
   """
   @behaviour A2A.Server.RequestHandler
 
+  require Logger
+
   alias A2A.Server.{
     Events,
     EventStream,
@@ -418,7 +420,7 @@ defmodule A2A.Server.DefaultHandler do
          :ok <- validate_url(server, config.url) do
       stored = %{config | id: config.id || server.id_generator.()}
       :ok = server.push_store.put(stored, server.scope)
-      {:ok, _pid} = PushDispatcher.Supervisor.ensure_started(server, stored.task_id)
+      ensure_dispatcher(server, stored.task_id)
       {:ok, stored}
     end
   end
@@ -467,7 +469,7 @@ defmodule A2A.Server.DefaultHandler do
     case validate_url(server, stored.url) do
       :ok ->
         :ok = server.push_store.put(stored, server.scope)
-        {:ok, _pid} = PushDispatcher.Supervisor.ensure_started(server, task_id)
+        ensure_dispatcher(server, task_id)
         :ok
 
       {:error, _} ->
@@ -478,6 +480,19 @@ defmodule A2A.Server.DefaultHandler do
   end
 
   defp maybe_register_inline_push(_server, _task_id, _req), do: :ok
+
+  # Best-effort dispatcher start: a failure to start the delivery process must not
+  # fail config creation (config is persisted) nor the message/send (inline path).
+  defp ensure_dispatcher(server, task_id) do
+    case PushDispatcher.Supervisor.ensure_started(server, task_id) do
+      {:ok, _pid} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("push dispatcher start failed task_id=#{task_id}: #{inspect(reason)}")
+        :ok
+    end
+  end
 
   defp ensure_push_enabled(%A2A.Server{push_notifications: true, push_store: store})
        when not is_nil(store),
