@@ -139,7 +139,8 @@ defmodule A2A.Plug.Router do
     if String.ends_with?(id, ":subscribe") do
       subscribe(conn, server, String.replace_suffix(id, ":subscribe", ""))
     else
-      render_rest(conn, REST.get_task(server, id))
+      conn = fetch_query_params(conn)
+      render_rest(conn, REST.get_task(server, id, conn.query_params))
     end
   end
 

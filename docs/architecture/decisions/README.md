@@ -22,6 +22,7 @@ supersedes an earlier one.
 | [0012](0012-push-notifications.md) | Push notification config CRUD + best-effort delivery engine | Accepted |
 | [0013](0013-spec-faithful-error-representation.md) | Spec-faithful error representation on both bindings | Accepted |
 | [0014](0014-request-validation-and-task-id-semantics.md) | Request validation: service parameters and task-identifier semantics | Accepted |
+| [0015](0015-multi-turn-continuation.md) | Multi-turn continuation: seeded executions and exchange history | Accepted |
 
 ADRs 0001–0008 were taken together during initial architecture planning (2026-08-29),
 informed by a feature inventory of the official

@@ -60,6 +60,18 @@ defmodule A2A.Plug.RESTTest do
     assert Jason.decode!(conn.resp_body)["id"] == id
   end
 
+  test "GET /tasks/:id honours the historyLength query parameter", %{opts: opts} do
+    # Spec 11.5: GET has no body, so request parameters arrive as camelCase query
+    # parameters — `?historyLength=0` must cap the response the same way the
+    # JSON-RPC request field does.
+    id = create_task(opts)
+
+    assert %{"history" => [_ | _]} = Jason.decode!(call(conn(:get, "/tasks/#{id}"), opts).resp_body)
+
+    body = Jason.decode!(call(conn(:get, "/tasks/#{id}?historyLength=0"), opts).resp_body)
+    refute Map.has_key?(body, "history")
+  end
+
   test "GET /tasks/:id unknown -> 404 AIP-193 error body", %{opts: opts} do
     conn = call(conn(:get, "/tasks/nope"), opts)
 

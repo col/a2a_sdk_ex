@@ -57,20 +57,22 @@ defmodule A2A.Server.DefaultHandler do
         %SendMessageRequest{message: %Message{} = message} = req,
         opts
       ) do
-    task_id = message.task_id || server.id_generator.()
-    context_id = message.context_id || server.id_generator.()
     timeout = Keyword.get(opts, :drain_timeout, server.drain_timeout)
 
-    with :ok <- resolve_task(server, message.task_id) do
+    with {:ok, existing} <- resolve_task(server, message) do
+      task_id = message.task_id || server.id_generator.()
+      context_id = context_id_for(existing, message, server)
+      seed = seed_task(existing, task_id, context_id, message)
       ctx = build_context(message, task_id, context_id, req)
       maybe_register_inline_push(server, task_id, req)
       :ok = Events.subscribe(server.pubsub, task_id)
 
-      case start_execution(server, task_id, context_id, ctx) do
+      case start_execution(server, task_id, context_id, ctx, seed) do
         {:ok, pid} ->
           server
-          |> drain_stream(task_id, context_id, pid, timeout)
+          |> drain_stream(task_id, seed, pid, timeout)
           |> then(&resolve_blocking(server, task_id, &1))
+          |> then(&truncate_result(&1, req))
 
         {:error, {:already_started, _}} ->
           Events.unsubscribe(server.pubsub, task_id)
@@ -92,10 +94,13 @@ defmodule A2A.Server.DefaultHandler do
   defp missing_message,
     do: %A2A.Error{code: :invalid_params, message: "SendMessageRequest.message is required"}
 
-  defp drain_stream(server, task_id, context_id, pid, timeout) do
+  # The drain folds events into its own projection, so it starts from the same
+  # seed the execution did — otherwise the task returned to a blocking caller
+  # would be missing the history and artifacts of every earlier turn.
+  defp drain_stream(server, task_id, seed, pid, timeout) do
     server.pubsub
     |> EventStream.stream(task_id, monitor: pid, idle_timeout: timeout, subscribe?: false)
-    |> Enum.reduce_while({:running, ResultAssembler.init(task_id, context_id)}, &fold_event/2)
+    |> Enum.reduce_while({:running, seed}, &fold_event/2)
   end
 
   defp fold_event(%Event{payload: payload, terminal?: true}, {_, acc}),
@@ -123,15 +128,15 @@ defmodule A2A.Server.DefaultHandler do
         %A2A.Server{} = server,
         %SendMessageRequest{message: %Message{} = message} = req
       ) do
-    task_id = message.task_id || server.id_generator.()
-    context_id = message.context_id || server.id_generator.()
-
-    with :ok <- resolve_task(server, message.task_id) do
+    with {:ok, existing} <- resolve_task(server, message) do
+      task_id = message.task_id || server.id_generator.()
+      context_id = context_id_for(existing, message, server)
+      seed = seed_task(existing, task_id, context_id, message)
       ctx = build_context(message, task_id, context_id, req)
       maybe_register_inline_push(server, task_id, req)
       :ok = Events.subscribe(server.pubsub, task_id)
 
-      case start_execution(server, task_id, context_id, ctx) do
+      case start_execution(server, task_id, context_id, ctx, seed) do
         {:ok, pid} ->
           server.pubsub
           |> EventStream.stream(task_id, monitor: pid, idle_timeout: :infinity, subscribe?: false)
@@ -236,9 +241,9 @@ defmodule A2A.Server.DefaultHandler do
 
   @impl true
   @spec get_task(A2A.Server.t(), GetTaskRequest.t()) :: {:ok, Task.t()} | {:error, A2A.Error.t()}
-  def get_task(%A2A.Server{} = server, %GetTaskRequest{id: id}) do
+  def get_task(%A2A.Server{} = server, %GetTaskRequest{id: id} = req) do
     case server.store.get(id, server.scope) do
-      {:ok, task} -> {:ok, task}
+      {:ok, task} -> {:ok, truncate_history(task, req.history_length)}
       {:error, :not_found} -> {:error, A2A.Error.not_found(id)}
     end
   end
@@ -291,21 +296,53 @@ defmodule A2A.Server.DefaultHandler do
   end
 
   # Spec 3.4.2: task ids are server-generated, and "client-provided taskId values
-  # for creating new tasks is NOT supported". So an absent taskId means "create",
-  # and a supplied one MUST reference an existing, non-terminal task — an unknown
-  # id is TaskNotFound rather than an implicit create.
-  defp resolve_task(_server, nil), do: :ok
+  # for creating new tasks is NOT supported". So an absent taskId means "create"
+  # (`{:ok, nil}`), and a supplied one MUST reference an existing, non-terminal
+  # task — an unknown id is TaskNotFound rather than an implicit create. The task
+  # itself is returned so the caller can continue it rather than start over.
+  defp resolve_task(_server, %Message{task_id: nil}), do: {:ok, nil}
 
-  defp resolve_task(server, task_id) do
+  defp resolve_task(server, %Message{task_id: task_id} = message) do
     case server.store.get(task_id, server.scope) do
       {:ok, task} ->
-        if ResultAssembler.terminal?(task),
-          do: {:error, A2A.Error.terminal_task(task_id)},
-          else: :ok
+        cond do
+          ResultAssembler.terminal?(task) -> {:error, A2A.Error.terminal_task(task_id)}
+          context_mismatch?(task, message) -> {:error, context_mismatch(task, message)}
+          true -> {:ok, task}
+        end
 
       {:error, :not_found} ->
         {:error, A2A.Error.not_found(task_id)}
     end
+  end
+
+  # Spec 3.4.3: "Agents MUST reject messages containing mismatching contextId and
+  # taskId". A client that states no contextId is not mismatching — that is the
+  # inference case below.
+  defp context_mismatch?(%Task{context_id: actual}, %Message{context_id: stated}),
+    do: is_binary(stated) and stated != "" and stated != actual
+
+  defp context_mismatch(%Task{} = task, %Message{} = message) do
+    %A2A.Error{
+      code: :invalid_params,
+      message: "contextId does not match the referenced task",
+      data: %{task_id: task.id, context_id: task.context_id, stated: message.context_id}
+    }
+  end
+
+  # Spec 3.4.3: "Agents MUST infer contextId from the task if only taskId is
+  # provided". A new task takes the client's contextId, or a generated one.
+  defp context_id_for(%Task{context_id: context_id}, _message, _server), do: context_id
+
+  defp context_id_for(nil, %Message{context_id: context_id}, server),
+    do: context_id || server.id_generator.()
+
+  # The projection each turn starts from: the stored task when continuing, a fresh
+  # one otherwise — with the incoming message appended so the exchange, not just
+  # the agent's replies, accumulates in history (spec 3.2.4).
+  defp seed_task(existing, task_id, context_id, %Message{} = message) do
+    (existing || ResultAssembler.init(task_id, context_id))
+    |> ResultAssembler.apply(message)
   end
 
   defp build_context(message, task_id, context_id, req) do
@@ -319,13 +356,18 @@ defmodule A2A.Server.DefaultHandler do
     }
   end
 
-  defp start_execution(server, task_id, context_id, ctx) do
+  defp start_execution(server, task_id, context_id, ctx, seed) do
     arg = %{
       task_id: task_id,
       context_id: context_id,
       executor: server.executor,
       context: ctx,
-      updater_opts: [pubsub: server.pubsub, store: server.store, scope: server.scope],
+      updater_opts: [
+        pubsub: server.pubsub,
+        store: server.store,
+        scope: server.scope,
+        task: seed
+      ],
       registry: server.registry
     }
 
@@ -442,11 +484,19 @@ defmodule A2A.Server.DefaultHandler do
     |> maybe_drop_artifacts(req.include_artifacts)
   end
 
+  # Spec 3.2.4: `historyLength` caps the history in the *response*; the stored
+  # task is untouched. A negative value is meaningless, so it is ignored rather
+  # than inverted by `Enum.take/2`'s negative-count semantics.
   defp truncate_history(task, nil), do: task
   defp truncate_history(task, n) when n < 0, do: task
 
   defp truncate_history(task, n),
     do: %{task | history: Enum.take(task.history, -n)}
+
+  defp truncate_result({:ok, %Task{} = task}, %SendMessageRequest{configuration: config}),
+    do: {:ok, truncate_history(task, config && config.history_length)}
+
+  defp truncate_result(other, _req), do: other
 
   defp maybe_drop_artifacts(task, true), do: task
   defp maybe_drop_artifacts(task, _), do: %{task | artifacts: []}

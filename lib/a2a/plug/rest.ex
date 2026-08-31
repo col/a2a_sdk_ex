@@ -48,8 +48,16 @@ defmodule A2A.Plug.REST do
     end
   end
 
-  def get_task(server, id) do
-    case DefaultHandler.get_task(server, %GetTaskRequest{id: id}) do
+  # Spec 11.5: a GET carries its request parameters as camelCase query
+  # parameters, so `?historyLength=n` is the REST spelling of the JSON-RPC
+  # request field. Both spellings are accepted, as elsewhere in this module.
+  def get_task(server, id, query \\ %{}) do
+    req = %GetTaskRequest{
+      id: id,
+      history_length: parse_int(query["historyLength"] || query["history_length"])
+    }
+
+    case DefaultHandler.get_task(server, req) do
       {:ok, %Task{} = t} -> {:reply, 200, A2A.JSON.to_json_map(t)}
       {:error, %A2A.Error{} = e} -> render_error(e)
     end

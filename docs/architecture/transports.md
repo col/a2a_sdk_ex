@@ -150,6 +150,10 @@ render.
   betting on which one a client reads. Serving only `GET` cost three MUST
   requirements (`STREAM-ORDER-002/003/004`): a conformant client POSTed, got a
   404, and reported it as "stream received no events".
+- **A `GET` carries its request parameters as camelCase query parameters**
+  (spec §11.5) — `GET /tasks/{id}?historyLength=10`, `GET /tasks?contextId=…`.
+  `historyLength` truncates the response's history only; the stored task is
+  untouched (ADR-0015).
 - **An unrouted path renders an AIP-193 404**, like every other error, rather
   than an empty body. An empty-bodied refusal tells a client nothing and reads
   as a transport fault — which is exactly how the routing gap above was

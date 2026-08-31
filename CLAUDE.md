@@ -123,6 +123,14 @@ track the gap, not gate on it.
   `taskId` that does not exist is `TaskNotFound`, *not* an implicit create — so a
   test that needs a predictable id pins `server.id_generator` (`server = %{server
   | id_generator: fn -> "t1" end}`) rather than setting `message.task_id`.
+- **A follow-up turn is seeded from the stored task** (ADR-0015): `resolve_task/2`
+  returns the existing task, the incoming message is appended to it, and that
+  projection seeds **both** the execution's `TaskUpdater` and the blocking drain's
+  assembler — they are separate projections, so seeding only one returns a caller
+  a task missing earlier turns. History records the whole exchange (user messages
+  included); `historyLength` truncates the *response* only, on `GetTask`,
+  `SendMessage` and `ListTasks`, and on REST arrives as a `?historyLength=` query
+  parameter (§11.5).
 - **Deferred (known-minor):** blocking `resolve_blocking` returns error code
   `:timeout` for *any* terminal-less end, including an executor that exits
   (`:DOWN`) without emitting a terminal. Distinguishing idle-timeout from `:DOWN`
