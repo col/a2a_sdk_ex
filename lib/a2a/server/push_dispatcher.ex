@@ -5,8 +5,9 @@ defmodule A2A.Server.PushDispatcher do
   and delivers the event (as a `StreamResponse`) to every webhook concurrently,
   awaiting all before the next event → per-task ordering. A slow/hung consumer
   blocks only this task (bounded by `push_timeout`); other tasks are unaffected.
-  Best-effort: delivery failures are logged, never raised. Shuts down after the
-  task's terminal event or an idle timeout.
+  Best-effort: delivery failures are logged, never raised. Shuts down when the task
+  reaches a terminal state — not at the end of a turn, so a task parked at
+  `input_required` keeps delivering when the client answers — or after an idle timeout.
   """
   use GenServer, restart: :temporary
   require Logger
@@ -30,9 +31,12 @@ defmodule A2A.Server.PushDispatcher do
   end
 
   @impl true
-  def handle_info(%Event{payload: payload, terminal?: terminal?}, state) do
+  def handle_info(%Event{payload: payload}, state) do
     deliver(state.server, state.task_id, StreamFrame.of(payload))
-    if terminal?, do: {:stop, :normal, state}, else: {:noreply, state, @idle_timeout}
+
+    if Events.final?(payload),
+      do: {:stop, :normal, state},
+      else: {:noreply, state, @idle_timeout}
   end
 
   def handle_info(:timeout, state), do: {:stop, :normal, state}

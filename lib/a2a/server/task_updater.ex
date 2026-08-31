@@ -74,8 +74,7 @@ defmodule A2A.Server.TaskUpdater do
       Events.broadcast(u.pubsub, %Event{
         task_id: u.task_id,
         context_id: u.context_id,
-        payload: message,
-        terminal?: true
+        payload: message
       })
 
     u
@@ -101,7 +100,7 @@ defmodule A2A.Server.TaskUpdater do
       last_chunk: Keyword.get(opts, :last_chunk, true)
     }
 
-    emit(u, evt, false)
+    emit(u, evt)
   end
 
   # --- internal ---
@@ -117,15 +116,10 @@ defmodule A2A.Server.TaskUpdater do
       }
     }
 
-    # Governs ENDING THE BLOCKING DRAIN (the `Enum.reduce_while` fold over
-    # `A2A.Server.EventStream` in `DefaultHandler.drain_stream/5` / `fold_event/2`).
-    # Intentionally ADDS `:input_required` vs `ResultAssembler`'s freeze/terminal set —
-    # the drain must stop and return control to the caller when input is required,
-    # even though the task itself remains resumable (not frozen).
-    emit(u, evt, state in [:completed, :failed, :canceled, :rejected, :input_required])
+    emit(u, evt)
   end
 
-  defp emit(u, domain_event, terminal?) do
+  defp emit(u, domain_event) do
     task = ResultAssembler.apply(u.task, domain_event)
     :ok = u.store.save(task, u.scope)
 
@@ -133,8 +127,7 @@ defmodule A2A.Server.TaskUpdater do
       Events.broadcast(u.pubsub, %Event{
         task_id: u.task_id,
         context_id: u.context_id,
-        payload: domain_event,
-        terminal?: terminal?
+        payload: domain_event
       })
 
     %{u | task: task}

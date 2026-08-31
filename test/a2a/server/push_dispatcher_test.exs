@@ -1,7 +1,7 @@
 defmodule A2A.Server.PushDispatcherTest do
   use ExUnit.Case, async: false
   alias A2A.Server.{DefaultHandler, PushConfigStore}
-  alias A2A.Test.{CapturingSender, DelayingSender, PartialRaisingSender, RaisingPushStore}
+  alias A2A.Test.{CapturingSender, DelayingSender, PartialRaisingSender, RaisingPushStore, Wait}
 
   alias A2A.Types.{
     Message,
@@ -176,6 +176,47 @@ defmodule A2A.Server.PushDispatcherTest do
       end)
 
     assert ordinals == Enum.sort(ordinals)
+  end
+
+  test "a dispatcher survives an interrupted turn and pushes the next turn's terminal event",
+       %{server: server} do
+    # Push delivery is per TASK, not per turn: a task parked at `input_required`
+    # is not over, so its dispatcher must keep delivering when the client answers.
+    cfg = %TaskPushNotificationConfig{url: "https://h/cb", token: "t"}
+    parked = %{with_id(server, "task-mt") | executor: A2A.Test.InputRequiredExecutor}
+
+    {:ok, %Task{status: %{state: :input_required}}} =
+      DefaultHandler.send_message(parked, send_req(cfg))
+
+    first_turn = collect_pushes([])
+    assert Enum.any?(first_turn, &match?(%StreamResponse{kind: :status_update}, &1))
+
+    # Turn one's execution exits just after the blocking send returns; a second
+    # turn started before then is rejected as :task_in_progress.
+    Wait.for_no_execution(server, "task-mt")
+
+    {:ok, %Task{status: %{state: :completed}}} =
+      DefaultHandler.send_message(
+        server,
+        %SendMessageRequest{
+          message: %Message{
+            message_id: "m_#{System.unique_integer([:positive])}",
+            role: :user,
+            task_id: "task-mt",
+            parts: [Part.text("answer")]
+          }
+        }
+      )
+
+    second_turn = collect_pushes([])
+
+    assert Enum.any?(second_turn, fn
+             %StreamResponse{kind: :status_update, status_update: %{status: %{state: s}}} ->
+               s == :completed
+
+             _ ->
+               false
+           end)
   end
 
   defp collect_pushes(acc) do

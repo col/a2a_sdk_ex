@@ -16,7 +16,7 @@ defmodule A2A.Server.TaskUpdaterTest do
 
   test "start_work broadcasts a working status and persists", %{updater: u} do
     TaskUpdater.start_work(u)
-    assert_receive %Event{task_id: "t-1", terminal?: false}
+    assert_receive %Event{task_id: "t-1"}
     assert {:ok, %{status: %{state: :working}}} = TaskStore.ETS.get("t-1", A2A.Scope.default())
   end
 
@@ -31,20 +31,23 @@ defmodule A2A.Server.TaskUpdaterTest do
     assert {:ok, _} = json_roundtrip(p1)
     assert_receive %Event{payload: p2}
     assert {:ok, _} = json_roundtrip(p2)
-    assert_receive %Event{payload: p3, terminal?: true}
+    assert_receive %Event{payload: p3}
     assert {:ok, _} = json_roundtrip(p3)
     assert {:ok, %{status: %{state: :completed}}} = TaskStore.ETS.get("t-1", A2A.Scope.default())
   end
 
-  test "requires_input is terminal for the blocking drain", %{updater: u} do
+  test "requires_input emits an input_required status that does not close a stream", %{
+    updater: u
+  } do
     u = TaskUpdater.start_work(u)
     TaskUpdater.requires_input(u)
-    assert_receive %Event{terminal?: false}
 
-    assert_receive %Event{
-      terminal?: true,
-      payload: %A2A.Types.TaskStatusUpdateEvent{status: %{state: :input_required}}
-    }
+    assert_receive %Event{payload: %A2A.Types.TaskStatusUpdateEvent{status: %{state: :working}}}
+
+    assert_receive %Event{payload: payload}
+    assert %A2A.Types.TaskStatusUpdateEvent{status: %{state: :input_required}} = payload
+    # §3.2.2 ends the blocking wait here; §3.1.2/§3.1.6 keep the stream open.
+    refute Events.final?(payload)
   end
 
   test "status transitions stamp a whole-second UTC timestamp", %{updater: u} do

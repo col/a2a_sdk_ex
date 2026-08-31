@@ -51,7 +51,7 @@ defmodule A2A.Test.SilentExecutor do
 end
 
 defmodule A2A.Test.AuthThenInputExecutor do
-  @moduledoc "Emits auth_required (non-terminal) then input_required (stops the stream)."
+  @moduledoc "Emits auth_required, then input_required."
   @behaviour A2A.Server.AgentExecutor
   alias A2A.Server.TaskUpdater
 

@@ -31,8 +31,7 @@ defmodule A2A.Server.EventsTest do
     evt = %Event{
       task_id: "t-1",
       context_id: "c",
-      payload: %A2A.Types.Task{id: "t-1"},
-      terminal?: false
+      payload: %A2A.Types.Task{id: "t-1"}
     }
 
     :ok = Events.broadcast(pubsub, evt)

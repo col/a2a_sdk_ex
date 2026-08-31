@@ -15,16 +15,19 @@ defmodule A2A.Server.Events do
   }
 
   defmodule Event do
-    @moduledoc "One frame on a task topic. `terminal?` marks the end of the blocking drain."
+    @moduledoc """
+    One frame on a task topic. Whether a frame ends a stream is derived from its
+    payload — see `A2A.Server.Events.final?/1` — never carried as a flag, so the
+    blocking rule (§3.2.2) and the streaming rule (§3.1.2, §3.1.6) cannot drift.
+    """
     @type payload ::
             Task.t() | Message.t() | TaskStatusUpdateEvent.t() | TaskArtifactUpdateEvent.t()
     @type t :: %__MODULE__{
             task_id: String.t(),
             context_id: String.t() | nil,
-            payload: payload(),
-            terminal?: boolean()
+            payload: payload()
           }
-    defstruct [:task_id, :context_id, :payload, terminal?: false]
+    defstruct [:task_id, :context_id, :payload]
   end
 
   @doc """

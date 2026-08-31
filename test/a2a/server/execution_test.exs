@@ -50,7 +50,12 @@ defmodule A2A.Server.ExecutionTest do
   test "runs the executor to a completed task and registers under task_id", %{pubsub: pubsub} = m do
     :ok = Events.subscribe(pubsub, "t-1")
     {:ok, _pid} = Execution.start(m.dyn, m.registry, arg(A2A.Test.EchoExecutor, "t-1", m))
-    assert_receive %Event{terminal?: true}, 1000
+
+    assert_receive %Event{
+                     payload: %A2A.Types.TaskStatusUpdateEvent{status: %{state: :completed}}
+                   },
+                   1000
+
     assert {:ok, %{status: %{state: :completed}}} = TaskStore.ETS.get("t-1", A2A.Scope.default())
   end
 
@@ -69,7 +74,11 @@ defmodule A2A.Server.ExecutionTest do
     assert Process.alive?(pid)
     refute_received {:DOWN, ^ref, :process, ^pid, _reason}
 
-    assert_receive %Event{terminal?: true}, 1000
+    assert_receive %Event{
+                     payload: %A2A.Types.TaskStatusUpdateEvent{status: %{state: :completed}}
+                   },
+                   1000
+
     assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 1000
     assert {:ok, %{status: %{state: :completed}}} = TaskStore.ETS.get("slow", A2A.Scope.default())
   end
@@ -92,7 +101,6 @@ defmodule A2A.Server.ExecutionTest do
     {:ok, _} = Execution.start(m.dyn, m.registry, arg(A2A.Test.BoomExecutor, "boom", m))
 
     assert_receive %Event{
-                     terminal?: true,
                      payload: %A2A.Types.TaskStatusUpdateEvent{status: %{state: :failed}}
                    },
                    1000
@@ -108,7 +116,6 @@ defmodule A2A.Server.ExecutionTest do
     ref = Process.monitor(pid)
 
     assert_receive %Event{
-                     terminal?: true,
                      payload: %A2A.Types.TaskStatusUpdateEvent{status: %{state: :failed}}
                    },
                    1000
@@ -127,7 +134,10 @@ defmodule A2A.Server.ExecutionTest do
     :ok = Events.subscribe(pubsub, "clean-throw")
     {:ok, _} = Execution.start(m.dyn, m.registry, arg(A2A.Test.ThrowExecutor, "clean-throw", m))
 
-    assert_receive %Event{terminal?: true}, 1000
+    assert_receive %Event{
+                     payload: %A2A.Types.TaskStatusUpdateEvent{status: %{state: :failed}}
+                   },
+                   1000
 
     assert {:ok, %{status: %{state: :failed, message: %{parts: [%A2A.Types.Part{text: text}]}}}} =
              TaskStore.ETS.get("clean-throw", A2A.Scope.default())
@@ -143,7 +153,6 @@ defmodule A2A.Server.ExecutionTest do
     {:ok, _} = Execution.start(m.dyn, m.registry, arg(A2A.Test.ExitExecutor, "exited", m))
 
     assert_receive %Event{
-                     terminal?: true,
                      payload: %A2A.Types.TaskStatusUpdateEvent{status: %{state: :failed}}
                    },
                    1000
