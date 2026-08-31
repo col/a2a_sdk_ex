@@ -50,10 +50,12 @@ defmodule A2A.Server.DefaultHandler do
   @impl true
   @spec send_message(A2A.Server.t(), SendMessageRequest.t(), keyword()) ::
           {:ok, Task.t()} | {:error, A2A.Error.t()}
+  def send_message(server, req, opts \\ [])
+
   def send_message(
         %A2A.Server{} = server,
         %SendMessageRequest{message: %Message{} = message} = req,
-        opts \\ []
+        opts
       ) do
     task_id = message.task_id || server.id_generator.()
     context_id = message.context_id || server.id_generator.()
@@ -80,6 +82,15 @@ defmodule A2A.Server.DefaultHandler do
       end
     end
   end
+
+  def send_message(%A2A.Server{}, %SendMessageRequest{message: nil}, _opts),
+    do: {:error, missing_message()}
+
+  # `SendMessageRequest.message` is required by the spec, but proto3-JSON has no
+  # notion of a required field: an absent `message` decodes to nil. Both bindings
+  # land here, so rejecting it at the handler covers JSON-RPC and REST alike.
+  defp missing_message,
+    do: %A2A.Error{code: :invalid_params, message: "SendMessageRequest.message is required"}
 
   defp drain_stream(server, task_id, context_id, pid, timeout) do
     server.pubsub
@@ -136,6 +147,9 @@ defmodule A2A.Server.DefaultHandler do
       end
     end
   end
+
+  def send_message_stream(%A2A.Server{}, %SendMessageRequest{message: nil}),
+    do: {:error, missing_message()}
 
   @doc """
   Re-attaches to an in-flight (or already-settled) task and returns a lazy stream: a
