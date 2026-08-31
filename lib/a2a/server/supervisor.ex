@@ -35,6 +35,9 @@ defmodule A2A.Server.Supervisor do
       id_generator: Keyword.get(opts, :id_generator, &A2A.Server.default_id/0),
       drain_timeout: Keyword.get(opts, :drain_timeout, :infinity),
       agent_card: Keyword.get(opts, :agent_card),
+      # The card is fixed for the life of this tree, so "last modified" is when
+      # the tree was configured (spec §8.6.1 makes Last-Modified optional).
+      agent_card_modified_at: DateTime.utc_now(),
       push_notifications: push?,
       push_store: if(push?, do: Keyword.get(opts, :push_store, A2A.Server.PushConfigStore.ETS)),
       push_sender: if(push?, do: Keyword.get(opts, :push_sender, A2A.Server.PushSender.Default)),

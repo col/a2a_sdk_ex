@@ -10,10 +10,12 @@ defmodule A2A.Server.MultiTurnTest do
 
   alias A2A.Types.{
     GetTaskRequest,
+    ListTasksRequest,
     Message,
     Part,
     SendMessageConfiguration,
     SendMessageRequest,
+    StreamResponse,
     Task
   }
 
@@ -119,6 +121,37 @@ defmodule A2A.Server.MultiTurnTest do
       # EchoExecutor completes with an agent message; both sides of the exchange
       # are recorded, user first.
       assert ["hello", "done"] = Enum.filter(texts(task), &(&1 in ["hello", "done"]))
+    end
+  end
+
+  describe "message responses (spec §3.1.1)" do
+    test "an executor may answer with a Message instead of creating a Task",
+         %{server: server} do
+      server = %{server | executor: A2A.Test.ReplyExecutor}
+
+      assert {:ok, %Message{role: :agent, parts: [%Part{text: "direct reply"}]}} =
+               send_msg(server, req("ping"))
+    end
+
+    test "a message response persists no task", %{server: server} do
+      # Spec §3.1.1: a direct Message is "for simple interactions that don't
+      # require task tracking" — so nothing is stored to track.
+      server = %{server | executor: A2A.Test.ReplyExecutor}
+
+      assert {:ok, %Message{}} = send_msg(server, req("ping"))
+      assert {:ok, %{tasks: []}} = DefaultHandler.list_tasks(server, %ListTasksRequest{})
+    end
+
+    test "the streaming form is exactly one message frame, then close",
+         %{server: server} do
+      # Spec §3.1.2: "the stream MUST contain exactly one Message object and
+      # then close immediately".
+      server = %{server | executor: A2A.Test.ReplyExecutor}
+
+      frames = server |> DefaultHandler.send_message_stream(req("ping")) |> Enum.to_list()
+
+      assert [%StreamResponse{kind: :message, message: %Message{parts: [%Part{text: t}]}}] = frames
+      assert t == "direct reply"
     end
   end
 

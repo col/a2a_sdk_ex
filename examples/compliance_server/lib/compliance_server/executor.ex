@@ -71,6 +71,10 @@ defmodule ComplianceServer.Executor do
 
   defp run(:reject_task, _ctx, u), do: TaskUpdater.reject(u, "rejected")
 
+  # Spec 3.1.1: a send may answer directly with a Message, creating no task.
+  defp run(:message_response, _ctx, u),
+    do: TaskUpdater.reply(u, Part.text("Direct message response"))
+
   # --- streaming.feature --------------------------------------------------
 
   defp run(:stream_001, _ctx, u), do: stream_artifact(u, Part.text("Stream hello from TCK"))

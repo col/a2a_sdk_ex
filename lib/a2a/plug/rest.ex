@@ -16,6 +16,7 @@ defmodule A2A.Plug.REST do
     GetTaskRequest,
     ListTaskPushNotificationConfigsRequest,
     ListTasksRequest,
+    Message,
     SendMessageRequest,
     SendMessageResponse,
     SubscribeToTaskRequest,
@@ -40,13 +41,18 @@ defmodule A2A.Plug.REST do
 
   def send_message(server, body) when is_map(body) do
     with {:ok, req} <- decode(body, SendMessageRequest),
-         {:ok, %Task{} = t} <- DefaultHandler.send_message(server, req) do
-      {:reply, 200, A2A.JSON.to_json_map(SendMessageResponse.task(t))}
+         {:ok, result} <- DefaultHandler.send_message(server, req) do
+      {:reply, 200, A2A.JSON.to_json_map(send_response(result))}
     else
       {:error, %A2A.Error{} = e} -> render_error(e)
       {:error, reason} -> bad_request(reason)
     end
   end
+
+  # `SendMessageResponse` is a oneof: the agent either created a task or answered
+  # directly with a message (spec 3.1.1).
+  defp send_response(%Task{} = t), do: SendMessageResponse.task(t)
+  defp send_response(%Message{} = m), do: SendMessageResponse.message(m)
 
   # Spec 11.5: a GET carries its request parameters as camelCase query
   # parameters, so `?historyLength=n` is the REST spelling of the JSON-RPC

@@ -25,6 +25,22 @@ defmodule A2A.Test.EchoExecutor do
       )
 end
 
+defmodule A2A.Test.ReplyExecutor do
+  @moduledoc "Answers directly with a Message, creating no task (spec 3.1.1)."
+  @behaviour A2A.Server.AgentExecutor
+  alias A2A.Server.TaskUpdater
+  alias A2A.Types.Part
+
+  @impl true
+  def execute(_ctx, updater) do
+    TaskUpdater.reply(updater, Part.text("direct reply"))
+    :ok
+  end
+
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+end
+
 defmodule A2A.Test.SilentExecutor do
   @moduledoc "Emits nothing and blocks, to exercise the idle drain timeout."
   @behaviour A2A.Server.AgentExecutor

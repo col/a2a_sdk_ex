@@ -116,6 +116,29 @@ defmodule A2A.Plug.RESTTest do
     assert Jason.decode!(conn.resp_body) |> is_map()
   end
 
+  @tag executor: A2A.Test.ReplyExecutor
+  test "POST /message:send renders a direct Message reply", %{opts: opts} do
+    body =
+      Jason.encode!(%{
+        "message" =>
+          A2A.JSON.to_json_map(%Message{
+            message_id: "m_reply",
+            role: :user,
+            parts: [Part.text("ping")]
+          })
+      })
+
+    conn =
+      conn(:post, "/message:send", body)
+      |> put_req_header("content-type", "application/json")
+      |> call(opts)
+
+    assert conn.status == 200
+    decoded = Jason.decode!(conn.resp_body)
+    assert %{"message" => %{"parts" => [%{"text" => "direct reply"}]}} = decoded
+    refute Map.has_key?(decoded, "task")
+  end
+
   test "GET /tasks lists tasks", %{opts: opts} do
     _id = create_task(opts)
 

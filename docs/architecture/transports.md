@@ -150,6 +150,15 @@ render.
   betting on which one a client reads. Serving only `GET` cost three MUST
   requirements (`STREAM-ORDER-002/003/004`): a conformant client POSTed, got a
   404, and reported it as "stream received no events".
+- **The agent card carries cache validators** (spec §8.6.1): an `ETag`, a
+  `Last-Modified`, and a `304` on a matching `If-None-Match`. `A2A.Plug.Cache`
+  hashes the **served body** rather than the card's `version` field — a card
+  whose URL or capabilities changed without a version bump would otherwise keep
+  a validator asserting nothing changed, and a stale card is a worse failure
+  than a redundant fetch. `Last-Modified` is when the supervision tree was
+  configured, which is when the card was fixed. `If-Modified-Since` is not
+  honoured; RFC 9110 §13.1.3 makes `If-None-Match` the precedent validator
+  anyway.
 - **A `GET` carries its request parameters as camelCase query parameters**
   (spec §11.5) — `GET /tasks/{id}?historyLength=10`, `GET /tasks?contextId=…`.
   `historyLength` truncates the response's history only; the stored task is

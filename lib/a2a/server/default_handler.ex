@@ -49,7 +49,7 @@ defmodule A2A.Server.DefaultHandler do
 
   @impl true
   @spec send_message(A2A.Server.t(), SendMessageRequest.t(), keyword()) ::
-          {:ok, Task.t()} | {:error, A2A.Error.t()}
+          {:ok, Task.t() | Message.t()} | {:error, A2A.Error.t()}
   def send_message(server, req, opts \\ [])
 
   def send_message(
@@ -102,6 +102,13 @@ defmodule A2A.Server.DefaultHandler do
     |> EventStream.stream(task_id, monitor: pid, idle_timeout: timeout, subscribe?: false)
     |> Enum.reduce_while({:running, seed}, &fold_event/2)
   end
+
+  # A bare `Message` payload is a direct reply (spec 3.1.1): no task was created,
+  # so it is returned as-is rather than folded into one. Nothing else ever
+  # broadcasts a `Message` — history seeding applies it to the projection
+  # directly, never through the event stream.
+  defp fold_event(%Event{payload: %Message{} = message}, _acc),
+    do: {:halt, {:message, message}}
 
   defp fold_event(%Event{payload: payload, terminal?: true}, {_, acc}),
     do: {:halt, {:done, ResultAssembler.apply(acc, payload)}}
@@ -376,6 +383,9 @@ defmodule A2A.Server.DefaultHandler do
 
   # Stream ended with a terminal frame → return the assembled task.
   defp resolve_blocking(_server, _task_id, {:done, %Task{} = task}), do: {:ok, task}
+
+  # The agent answered directly; there is no task to assemble or read back.
+  defp resolve_blocking(_server, _task_id, {:message, %Message{} = message}), do: {:ok, message}
 
   # Stream ended without a terminal frame (execution :DOWN or idle timeout).
   # A caught executor raise persists `failed`, so prefer the store's terminal task;

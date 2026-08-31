@@ -57,6 +57,30 @@ defmodule A2A.Server.TaskUpdater do
   @spec requires_input(t(), Message.t() | nil) :: t()
   def requires_input(u, message \\ nil), do: status(u, :input_required, message)
 
+  @doc """
+  Answers the caller directly with a `Message`, creating no task.
+
+  Spec §3.1.1: a send may return "a direct response message (for simple
+  interactions that don't require task tracking)", and §3.1.2 requires the
+  streaming form to be "exactly one Message object and then close immediately".
+  Nothing is persisted — there is no task to track — so this ends the
+  interaction: emitting anything else afterwards has no task to attach to.
+  """
+  @spec reply(t(), Part.t() | Message.t()) :: t()
+  def reply(u, %Part{} = part), do: reply(u, agent_message(u, part))
+
+  def reply(u, %Message{} = message) do
+    :ok =
+      Events.broadcast(u.pubsub, %Event{
+        task_id: u.task_id,
+        context_id: u.context_id,
+        payload: message,
+        terminal?: true
+      })
+
+    u
+  end
+
   @spec add_artifact(t(), Part.t() | Artifact.t(), keyword()) :: t()
   def add_artifact(u, part_or_artifact, opts \\ [])
 

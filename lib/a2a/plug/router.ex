@@ -15,7 +15,7 @@ defmodule A2A.Plug.Router do
   """
   use Plug.Router, copy_opts_to_assign: :init_opts
 
-  alias A2A.Plug.{JSONRPC, REST, ServiceParams, SSE}
+  alias A2A.Plug.{Cache, JSONRPC, REST, ServiceParams, SSE}
 
   plug(:match)
   plug(:validate_service_params)
@@ -50,13 +50,33 @@ defmodule A2A.Plug.Router do
     server = A2A.Server.handle(conn.assigns.init_opts[:server])
 
     case server.agent_card do
-      nil ->
-        send_resp(conn, 404, "")
+      nil -> render_service_error(conn, no_agent_card())
+      card -> send_agent_card(conn, card, server.agent_card_modified_at)
+    end
+  end
 
-      card ->
-        conn
-        |> put_resp_content_type("application/json")
-        |> send_resp(200, A2A.JSON.encode!(card))
+  # Spec §8.6.1: the card should carry cache validators, since it changes far less
+  # often than clients fetch it. A conditional request that still matches gets a
+  # 304 carrying those same validators (RFC 9110 §15.4.5) and no body.
+  defp send_agent_card(conn, card, modified_at) do
+    body = A2A.JSON.encode!(card)
+    etag = Cache.etag(body)
+
+    conn = validators(conn, etag, modified_at)
+
+    if Cache.fresh?(conn, etag) do
+      send_resp(conn, 304, "")
+    else
+      conn |> put_resp_content_type("application/json") |> send_resp(200, body)
+    end
+  end
+
+  defp validators(conn, etag, modified_at) do
+    conn = put_resp_header(conn, "etag", etag)
+
+    case modified_at do
+      %DateTime{} = at -> put_resp_header(conn, "last-modified", Cache.http_date(at))
+      nil -> conn
     end
   end
 
@@ -178,6 +198,11 @@ defmodule A2A.Plug.Router do
   # An unrouted path is still an A2A error, and renders like one. An empty-bodied
   # 404 tells a client nothing, and reads as a transport fault rather than a
   # refusal — which is exactly how it was misdiagnosed once already.
+  # The route exists; this server was simply started without a card to serve.
+  defp no_agent_card do
+    %A2A.Error{code: :method_not_found, message: "this agent serves no agent card"}
+  end
+
   defp not_found(conn) do
     render_service_error(conn, %A2A.Error{
       code: :method_not_found,

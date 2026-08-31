@@ -123,6 +123,10 @@ track the gap, not gate on it.
   `taskId` that does not exist is `TaskNotFound`, *not* an implicit create — so a
   test that needs a predictable id pins `server.id_generator` (`server = %{server
   | id_generator: fn -> "t1" end}`) rather than setting `message.task_id`.
+- **An executor may answer with a bare `Message`** via `TaskUpdater.reply/2`
+  (ADR-0016), creating and persisting no task. A `%Message{}` **event payload**
+  means exactly that, so nothing else may broadcast one — history seeding applies
+  its message to the projection directly, never through the event stream.
 - **A follow-up turn is seeded from the stored task** (ADR-0015): `resolve_task/2`
   returns the existing task, the incoming message is appended to it, and that
   projection seeds **both** the execution's `TaskUpdater` and the blocking drain's

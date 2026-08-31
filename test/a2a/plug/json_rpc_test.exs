@@ -16,6 +16,26 @@ defmodule A2A.Plug.JSONRPCTest do
     %{server: A2A.Server.handle(name)}
   end
 
+  test "SendMessage renders a direct Message reply, not a task", %{server: server} do
+    # Spec 3.1.1: a send may answer with a Message; SendMessageResponse is a
+    # oneof, so the envelope carries `message` rather than `task`.
+    server = %{server | executor: A2A.Test.ReplyExecutor}
+
+    req = %SendMessageRequest{
+      message: %Message{message_id: "m_reply", role: :user, parts: [Part.text("ping")]}
+    }
+
+    assert {:reply, %{"result" => result}} =
+             JSONRPC.dispatch(server, %{
+               method: "SendMessage",
+               params: A2A.JSON.to_json_map(req),
+               id: 7
+             })
+
+    assert %{"message" => %{"parts" => [%{"text" => "direct reply"}]}} = result
+    refute Map.has_key?(result, "task")
+  end
+
   defp send_body(text) do
     req = %SendMessageRequest{
       message: %Message{message_id: "m1", role: :user, parts: [Part.text(text)]}
