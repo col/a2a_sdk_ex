@@ -61,7 +61,11 @@ defmodule A2A.Server.Supervisor do
   defp push_children(false, _handle), do: []
 
   defp push_children(true, handle) do
-    [handle.push_store]
+    [
+      handle.push_store,
+      {Registry, keys: :unique, name: handle.push_registry},
+      {A2A.Server.PushDispatcher.Supervisor, name: handle.push_dyn_sup}
+    ]
   end
 
   # Start PubSub only if not already running (a Phoenix host passes its own).
