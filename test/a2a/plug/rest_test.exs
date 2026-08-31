@@ -19,9 +19,12 @@ defmodule A2A.Plug.RESTTest do
     pubsub = :"pubsub_rest_#{System.unique_integer([:positive])}"
     executor = Map.get(context, :executor, A2A.Test.EchoExecutor)
 
-    start_supervised!(
-      {ServerSupervisor, name: name, executor: executor, pubsub: pubsub, agent_card: @card}
-    )
+    start_supervised!({
+      ServerSupervisor,
+      # Subscribe tests park on a non-terminal task; without this the synchronous
+      # Router.call/2 would wait out the 5-minute default before returning.
+      name: name, executor: executor, pubsub: pubsub, agent_card: @card, stream_idle_timeout: 250
+    })
 
     :ets.delete_all_objects(TaskStoreETS)
     %{opts: Router.init(server: name), name: name}
@@ -178,7 +181,7 @@ defmodule A2A.Plug.RESTTest do
 
   # Spec 11.3.2 lists `POST /tasks/{id}:subscribe`; the vendored proto annotates
   # the same operation `get:`. The two disagree, so both verbs are served.
-  @tag executor: A2A.Test.AuthThenInputExecutor
+  @tag executor: A2A.Test.InputRequiredExecutor
   test "POST /tasks/:id:subscribe subscribes like the GET form", %{opts: opts} do
     # A task left in `input_required` is non-terminal, so subscribing is valid.
     id = create_task(opts)

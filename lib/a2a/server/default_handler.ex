@@ -133,6 +133,12 @@ defmodule A2A.Server.DefaultHandler do
   @doc """
   Starts (or attaches to) execution and returns a lazy stream of `StreamResponse` frames.
 
+  The stream closes when the task reaches a **terminal** state (§3.1.2) or after a
+  direct `Message` reply — not when a turn ends. An agent that parks at
+  `input_required` keeps the stream open: the client answers on a separate request
+  and the next turn's frames arrive here. `server.stream_idle_timeout` bounds a
+  stream that goes completely silent.
+
   Enumeration contract: subscription and execution start/lookup happen eagerly, in the
   calling process, before this function returns — but the returned stream's `receive`
   runs at *enumeration* time, in whichever process enumerates it. PubSub events are
@@ -158,9 +164,12 @@ defmodule A2A.Server.DefaultHandler do
       :ok = Events.subscribe(server.pubsub, task_id)
 
       case start_execution(server, task_id, context_id, ctx, seed) do
-        {:ok, pid} ->
+        {:ok, _pid} ->
           server.pubsub
-          |> EventStream.stream(task_id, monitor: pid, idle_timeout: :infinity, subscribe?: false)
+          |> EventStream.stream(task_id,
+            idle_timeout: server.stream_idle_timeout,
+            subscribe?: false
+          )
           |> Stream.map(&StreamFrame.of(&1.payload))
 
         {:error, {:already_started, _}} ->

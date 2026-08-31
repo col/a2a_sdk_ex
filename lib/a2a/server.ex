@@ -13,6 +13,7 @@ defmodule A2A.Server do
           scope: A2A.Scope.t(),
           id_generator: (-> String.t()),
           drain_timeout: timeout_opt(),
+          stream_idle_timeout: timeout_opt(),
           agent_card: A2A.Types.AgentCard.t() | nil,
           agent_card_modified_at: DateTime.t() | nil,
           push_notifications: boolean(),
@@ -40,6 +41,7 @@ defmodule A2A.Server do
     :push_registry,
     :push_dyn_sup,
     drain_timeout: :infinity,
+    stream_idle_timeout: 300_000,
     push_notifications: false,
     push_timeout: 5_000
   ]

@@ -19,7 +19,13 @@ defmodule A2A.Server.StreamingPropertyTest do
     name = :"srv_prop_#{System.unique_integer([:positive])}"
     pubsub = :"pubsub_prop_#{System.unique_integer([:positive])}"
 
-    start_supervised!({A2A.Server.Supervisor, name: name, executor: ReplayExecutor, pubsub: pubsub})
+    start_supervised!({
+      A2A.Server.Supervisor,
+      # `valid_event_script/0` can end on `input_required`, which (correctly,
+      # per §3.1.2) does not close the stream — only a short idle timeout does,
+      # since nothing further is ever emitted after the script runs out.
+      name: name, executor: ReplayExecutor, pubsub: pubsub, stream_idle_timeout: 100
+    })
 
     %{server: A2A.Server.handle(name)}
   end

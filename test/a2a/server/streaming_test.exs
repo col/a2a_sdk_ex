@@ -1,7 +1,7 @@
 defmodule A2A.Server.StreamingTest do
   use ExUnit.Case, async: false
   alias A2A.Server.DefaultHandler
-  alias A2A.Test.GatedExecutor
+  alias A2A.Test.{GatedExecutor, Wait}
   alias A2A.Types.{Message, Part, SendMessageRequest}
 
   setup do
@@ -81,18 +81,48 @@ defmodule A2A.Server.StreamingTest do
     end
   end
 
-  test "streaming does not stop on auth_required but stops on input_required",
+  test "a stream stays open through auth_required and input_required, closing at terminal",
        %{server: server} do
-    server = %{server | executor: A2A.Test.AuthThenInputExecutor}
-    frames = server |> DefaultHandler.send_message_stream(req("go")) |> Enum.to_list()
+    # §3.1.2: "The stream MUST close when the task reaches a terminal state". An
+    # interrupted state is not terminal — the client answers on a separate request
+    # and the next turn's frames arrive on this same stream.
+    server = %{server | executor: A2A.Test.AuthThenInputExecutor, id_generator: fn -> "sm1" end}
+    caller = self()
+
+    stream = DefaultHandler.send_message_stream(server, req("go"))
+
+    # Turn two completes the task, from another process (this one must enumerate).
+    spawn_link(fn ->
+      Wait.for_no_execution(server, "sm1")
+      echo = %{server | executor: A2A.Test.EchoExecutor}
+      send(caller, {:turn_two, DefaultHandler.send_message(echo, req("more", task_id: "sm1"))})
+    end)
 
     states =
       for %A2A.Types.StreamResponse{kind: :status_update, status_update: %{status: %{state: s}}} <-
-            frames,
+            Enum.to_list(stream),
           do: s
 
     assert :auth_required in states
-    assert List.last(states) == :input_required
+    assert :input_required in states
+    assert List.last(states) == :completed
+    assert_receive {:turn_two, {:ok, _}}, 2000
+  end
+
+  test "a parked stream is bounded by stream_idle_timeout", %{server: server} do
+    # Nobody ever answers the input request, so nothing closes the stream but the
+    # idle timeout. Without it the SSE request process would be held indefinitely.
+    server = %{
+      server
+      | executor: A2A.Test.AuthThenInputExecutor,
+        stream_idle_timeout: 150
+    }
+
+    frames = server |> DefaultHandler.send_message_stream(req("go")) |> Enum.to_list()
+
+    last = List.last(frames)
+    assert %A2A.Types.StreamResponse{kind: :status_update} = last
+    assert last.status_update.status.state == :input_required
   end
 
   test "resubscribe on a finished task is rejected", %{server: server} do
