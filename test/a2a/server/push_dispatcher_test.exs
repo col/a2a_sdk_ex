@@ -4,6 +4,7 @@ defmodule A2A.Server.PushDispatcherTest do
   alias A2A.Test.{CapturingSender, DelayingSender, PartialRaisingSender, RaisingPushStore, Wait}
 
   alias A2A.Types.{
+    CancelTaskRequest,
     Message,
     Part,
     SendMessageConfiguration,
@@ -217,6 +218,139 @@ defmodule A2A.Server.PushDispatcherTest do
              _ ->
                false
            end)
+  end
+
+  describe "dispatcher liveness" do
+    # The dispatcher's idle timeout is a garbage collector for tasks nobody is
+    # working on. It must never reap a dispatcher out from under a live execution,
+    # and a task that outlived one must get a fresh dispatcher before anything is
+    # broadcast for it — otherwise delivery stops silently while the config, and
+    # so the client's belief that it is subscribed, both remain.
+
+    test "a silent agent keeps its dispatcher: the terminal event is still delivered",
+         %{server: server} do
+      # The agent emits `working`, then thinks for 300ms — longer than the idle
+      # timeout — before completing. Nothing else happens on the task in between.
+      slow = %{
+        with_id(server, "task-slow")
+        | executor: A2A.Test.SlowCompleteExecutor,
+          push_idle_timeout: 100
+      }
+
+      cfg = %TaskPushNotificationConfig{url: "https://h/cb", token: "t"}
+      {:ok, %Task{status: %{state: :completed}}} = DefaultHandler.send_message(slow, send_req(cfg))
+
+      states = push_states(collect_pushes([]))
+      assert :completed in states, "terminal event was not delivered: #{inspect(states)}"
+    end
+
+    test "a reaped dispatcher is revived by the next turn", %{server: server} do
+      cfg = %TaskPushNotificationConfig{url: "https://h/cb", token: "t"}
+
+      parked = %{
+        with_id(server, "task-revive")
+        | executor: A2A.Test.InputRequiredExecutor,
+          push_idle_timeout: 100
+      }
+
+      {:ok, %Task{status: %{state: :input_required}}} =
+        DefaultHandler.send_message(parked, send_req(cfg))
+
+      _first_turn = collect_pushes([])
+      wait_for_no_dispatcher(server, "task-revive")
+
+      # Turn two carries no inline config — the client registered once, as the API
+      # intends — so nothing but the store tells us a webhook is still wanted.
+      {:ok, %Task{status: %{state: :completed}}} =
+        DefaultHandler.send_message(%{server | push_idle_timeout: 100}, follow_up("task-revive"))
+
+      states = push_states(collect_pushes([]))
+      assert :completed in states, "second turn delivered nothing: #{inspect(states)}"
+    end
+
+    test "a reaped dispatcher is revived by a cancel", %{server: server} do
+      # `cancel_task/2` on a parked task settles `:canceled` and broadcasts it
+      # directly, with no execution involved — its own door to the same bug.
+      cfg = %TaskPushNotificationConfig{url: "https://h/cb", token: "t"}
+
+      parked = %{
+        with_id(server, "task-cancel")
+        | executor: A2A.Test.InputRequiredExecutor,
+          push_idle_timeout: 100
+      }
+
+      {:ok, %Task{status: %{state: :input_required}}} =
+        DefaultHandler.send_message(parked, send_req(cfg))
+
+      _first_turn = collect_pushes([])
+      wait_for_no_dispatcher(server, "task-cancel")
+
+      {:ok, %Task{status: %{state: :canceled}}} =
+        DefaultHandler.cancel_task(%{server | push_idle_timeout: 100}, %CancelTaskRequest{
+          id: "task-cancel"
+        })
+
+      states = push_states(collect_pushes([]))
+      assert :canceled in states, "cancel delivered nothing: #{inspect(states)}"
+    end
+
+    test "a push_store whose list/2 raises does not fail SendMessage", %{server: server} do
+      # The revival read runs on every send once push is enabled. A host store that
+      # raises there must cost push delivery, not the caller's whole operation —
+      # same best-effort contract as the inline registration path.
+      server = %{server | push_store: A2A.Test.ListRaisingPushStore}
+
+      assert {:ok, %Task{status: %{state: :completed}}} =
+               DefaultHandler.send_message(with_id(server, "task-list-raise"), send_req())
+    end
+
+    test "a task nobody is working on is still reaped", %{server: server} do
+      # The timeout's actual job. Without this, every abandoned task leaks a
+      # process and a subscription.
+      cfg = %TaskPushNotificationConfig{url: "https://h/cb", token: "t"}
+
+      parked = %{
+        with_id(server, "task-reaped")
+        | executor: A2A.Test.InputRequiredExecutor,
+          push_idle_timeout: 100
+      }
+
+      {:ok, %Task{status: %{state: :input_required}}} =
+        DefaultHandler.send_message(parked, send_req(cfg))
+
+      wait_for_no_dispatcher(server, "task-reaped")
+      assert Registry.lookup(server.push_registry, "task-reaped") == []
+    end
+  end
+
+  defp follow_up(task_id) do
+    %SendMessageRequest{
+      message: %Message{
+        message_id: "m_#{System.unique_integer([:positive])}",
+        role: :user,
+        task_id: task_id,
+        parts: [Part.text("answer")]
+      }
+    }
+  end
+
+  defp push_states(frames) do
+    for %StreamResponse{kind: :status_update, status_update: %{status: %{state: s}}} <- frames,
+        do: s
+  end
+
+  defp wait_for_no_dispatcher(server, task_id, tries \\ 50) do
+    case Registry.lookup(server.push_registry, task_id) do
+      [] ->
+        :ok
+
+      _ when tries > 0 ->
+        Process.sleep(20)
+        wait_for_no_dispatcher(server, task_id, tries - 1)
+
+      _ ->
+        flunk("dispatcher for #{task_id} was never reaped")
+    end
   end
 
   defp collect_pushes(acc) do

@@ -81,6 +81,31 @@ defmodule A2A.Test.DelayingSender do
   end
 end
 
+defmodule A2A.Test.ListRaisingPushStore do
+  @moduledoc """
+  Test `A2A.Server.PushConfigStore` whose `list/2` always raises — proves the
+  dispatcher-revival read in `DefaultHandler.ensure_dispatcher_for_configured/2`
+  is best-effort. That read sits on the hot path of every `SendMessage` on a
+  push-enabled server, so a broken host store must cost push delivery, not the
+  whole operation. `put/2`, `get/3`, `delete/3` delegate to the real ETS store.
+  """
+  @behaviour A2A.Server.PushConfigStore
+
+  alias A2A.Server.PushConfigStore.ETS
+
+  @impl true
+  def put(config, scope), do: ETS.put(config, scope)
+
+  @impl true
+  def get(task_id, id, scope), do: ETS.get(task_id, id, scope)
+
+  @impl true
+  def list(_task_id, _scope), do: raise("boom: push store list failed")
+
+  @impl true
+  def delete(task_id, id, scope), do: ETS.delete(task_id, id, scope)
+end
+
 defmodule A2A.Test.RaisingPushStore do
   @moduledoc """
   Test `A2A.Server.PushConfigStore` whose `put/2` always raises — proves the

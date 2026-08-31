@@ -20,6 +20,7 @@ defmodule A2A.Server do
           push_store: module() | nil,
           push_sender: module() | nil,
           push_timeout: timeout_opt(),
+          push_idle_timeout: timeout_opt(),
           push_url_validator: (String.t() -> :ok | {:error, term()}) | nil,
           push_registry: atom() | nil,
           push_dyn_sup: atom() | nil
@@ -43,7 +44,8 @@ defmodule A2A.Server do
     drain_timeout: :infinity,
     stream_idle_timeout: 300_000,
     push_notifications: false,
-    push_timeout: 5_000
+    push_timeout: 5_000,
+    push_idle_timeout: 60_000
   ]
 
   @spec handle(atom()) :: t()
