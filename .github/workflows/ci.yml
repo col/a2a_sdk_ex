@@ -82,10 +82,12 @@ jobs:
       - run: mix a2a.gen_proto
       - run: mix test --only proto
   # A2A TCK compliance: runs the official conformance suite against the echo
-  # server. Report-only for now (continue-on-error), so it never fails the build.
+  # server. Report-only for now — TCK non-compliance keeps the job GREEN (we are
+  # not compliant yet and don't want a red ✗ on the PR). The job only turns RED
+  # if the harness itself breaks (run_tck.sh exits 2/3/4: TCK missing, server
+  # won't boot, never ready) — those are real, actionable failures.
   compliance:
     runs-on: ubuntu-24.04
-    continue-on-error: true          # report-only: never fails the build (yet)
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
@@ -107,7 +109,15 @@ jobs:
       - run: mix deps.get
       - run: mix deps.get
         working-directory: examples/echo_server
-      - run: scripts/run_tck.sh
+      - name: Run TCK (report-only)
+        run: |
+          status=0
+          scripts/run_tck.sh || status=$?
+          case "$status" in
+            0) echo "TCK: fully compliant." ;;
+            2|3|4) echo "::error::TCK harness failure (exit $status) — see log."; exit "$status" ;;
+            *) echo "::warning::TCK reported non-compliance (exit $status) — report-only, not failing the build." ;;
+          esac
       - uses: actions/upload-artifact@v4
         if: always()
         with:

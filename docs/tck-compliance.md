@@ -69,6 +69,11 @@ Open `reports/compatibility.html` for the summary and per-requirement breakdown.
 
 ## CI
 
-The `compliance` job in CI runs this same script on every build, is non-blocking
-(`continue-on-error`), and uploads `reports/` as a downloadable artifact named
-`tck-compliance-report`.
+The `compliance` job in CI runs this same script on every build and uploads
+`reports/` as a downloadable artifact named `tck-compliance-report`.
+
+It is **report-only**: TCK non-compliance keeps the job **green** (we are not
+compliant yet and don't want a red ✗ on the PR). The job only turns **red** if
+the harness itself breaks — i.e. `run_tck.sh` exits `2`/`3`/`4` (TCK checkout
+missing, echo server won't boot, or SUT never becomes ready) — because those are
+real, actionable failures rather than "we're still working towards compliance".
