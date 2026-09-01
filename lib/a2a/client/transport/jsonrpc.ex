@@ -63,11 +63,61 @@ defmodule A2A.Client.Transport.JSONRPC do
   end
 
   @impl true
-  def send_message_stream(_client, _request, _opts), do: raise("implemented in Task 7")
+  def send_message_stream(client, request, opts),
+    do: stream(client, "SendStreamingMessage", request, opts)
+
   @impl true
-  def resubscribe(_client, _request, _opts), do: raise("implemented in Task 7")
+  def resubscribe(client, request, opts),
+    do: stream(client, "SubscribeToTask", request, opts)
 
   # --- internals ---
+
+  defp stream(client, method, request, opts) do
+    id = System.unique_integer([:positive])
+
+    body =
+      Jason.encode!(%{
+        "jsonrpc" => "2.0",
+        "id" => id,
+        "method" => method,
+        "params" => A2A.JSON.to_json_map(request)
+      })
+
+    headers = [{"accept", "text/event-stream"} | base_headers(client, opts)]
+
+    req = %{
+      method: :post,
+      url: client.endpoint,
+      headers: headers,
+      body: body,
+      opts: http_opts(client, opts, :stream)
+    }
+
+    with {:ok, %{body: chunks}} <- run(client, req, :stream) do
+      {:ok, decode_stream(chunks)}
+    end
+  end
+
+  # chunks :: Enumerable of raw binary body parts
+  defp decode_stream(chunks) do
+    chunks
+    |> A2A.Client.SSE.frames()
+    |> Stream.map(&decode_frame/1)
+  end
+
+  # Each JSON-RPC SSE frame is a full envelope carrying one StreamResponse in result.
+  defp decode_frame(data) do
+    case Jason.decode!(data) do
+      %{"result" => result} ->
+        {:ok, %A2A.Types.StreamResponse{} = sr} =
+          A2A.JSON.from_json_map(result, A2A.Types.StreamResponse)
+
+        sr.task || sr.message || sr.status_update || sr.artifact_update
+
+      %{"error" => err} ->
+        raise CErr.from_jsonrpc(err)
+    end
+  end
 
   defp unary(client, method, request, result_mod, opts) do
     with {:ok, result} <- call(client, method, request, opts) do
