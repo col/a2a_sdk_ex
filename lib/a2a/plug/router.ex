@@ -16,6 +16,7 @@ defmodule A2A.Plug.Router do
   use Plug.Router, copy_opts_to_assign: :init_opts
 
   alias A2A.Plug.{Cache, Identity, JSONRPC, REST, ServiceParams, SSE}
+  alias A2A.Server.AgentCardURL
 
   plug(:match)
   plug(:validate_service_params)
@@ -68,8 +69,11 @@ defmodule A2A.Plug.Router do
   # Spec §8.6.1: the card should carry cache validators, since it changes far less
   # often than clients fetch it. A conditional request that still matches gets a
   # 304 carrying those same validators (RFC 9110 §15.4.5) and no body.
+  #
+  # Interface URLs are resolved from the request (A2A.Server.AgentCardURL) before
+  # encoding, so the ETag reflects the exact bytes served at this host/mount.
   defp send_agent_card(conn, card, modified_at) do
-    body = A2A.JSON.encode!(card)
+    body = A2A.JSON.encode!(AgentCardURL.resolve(card, conn))
     etag = Cache.etag(body)
 
     conn = validators(conn, etag, modified_at)
