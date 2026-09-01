@@ -117,6 +117,7 @@ Each takes a final optional `opts` keyword (per-call `headers`, `http_opts`,
 
 ```elixir
 # Construction / discovery
+fetch_agent_card(url, opts \\ [])         :: {:ok, AgentCard.t()} | {:error, A2A.Error.t()}
 connect(url_or_card, opts \\ [])          :: {:ok, t()} | {:error, A2A.Error.t()}
 agent_card(client)                        :: AgentCard.t()          # already-resolved base card
 get_extended_agent_card(client, opts \\ []) :: {:ok, AgentCard.t()} | {:error, A2A.Error.t()}
@@ -135,6 +136,27 @@ get_push_config(client, task_id, config_id, opts \\ []) :: {:ok, TaskPushNotific
 list_push_configs(client, task_id, opts \\ [])   :: {:ok, ListTaskPushNotificationConfigsResponse.t()} | {:error, A2A.Error.t()}
 delete_push_config(client, task_id, config_id, opts \\ []) :: :ok | {:error, A2A.Error.t()}
 ```
+
+### Discovery is decoupled from connection
+
+Fetching a card, building a client, and doing both are three separate concerns.
+The three entry points compose rather than nest behaviour:
+
+- **`fetch_agent_card(url, opts)`** — fetch + decode the base card from
+  `/.well-known/agent-card.json` and return `{:ok, %AgentCard{}}`. No transport
+  selection, no client built. A thin public wrapper over
+  `A2A.Client.CardResolver.resolve/2` for callers who just want to inspect a
+  card (capabilities, security schemes, advertised interfaces) or cache it.
+- **`connect(%AgentCard{}, opts)`** — build a `%A2A.Client{}` from a card the
+  caller **already holds**: run transport selection only, **no network fetch**.
+  Lets a caller fetch once and connect many times, supply a card obtained
+  out-of-band, or pin a hand-built card.
+- **`connect(url, opts)`** — the convenience path, **unchanged**: `fetch_agent_card/2`
+  then `connect(card, opts)`. Equivalent to
+  `with {:ok, card} <- fetch_agent_card(url, opts), do: connect(card, opts)`.
+
+So `connect(url)` is exactly `fetch_agent_card` + `connect(card)` — the existing
+one-call ergonomics stay, and the two steps are independently usable.
 
 ### Message input
 
@@ -187,9 +209,10 @@ Default is **server preference** (card order wins); a caller opts into client
 preference by setting `config.preferred_transports`. Binding-name mapping matches
 what the server advertises for JSON-RPC and REST (HTTP+JSON).
 
-`connect/2` accepts either a URL (→ fetch card via `CardResolver`, then select)
-or a pre-fetched `%AgentCard{}` (→ select directly). A caller may also pin a
-transport explicitly via `opts` to bypass selection.
+`connect/2` accepts either a URL (→ `fetch_agent_card/2` via `CardResolver`, then
+select) or a pre-fetched `%AgentCard{}` (→ select directly, no network). See
+[Discovery is decoupled from connection](#discovery-is-decoupled-from-connection).
+A caller may also pin a transport explicitly via `opts` to bypass selection.
 
 ## Behaviour: errors
 
