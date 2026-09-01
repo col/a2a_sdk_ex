@@ -27,6 +27,7 @@ defmodule A2A.Server.AgentTest do
 
     @impl A2A.Server.AgentExecutor
     def cancel(_ctx, updater) do
+      # credo:disable-for-next-line Credo.Check.Design.AliasUsage
       A2A.Server.TaskUpdater.update_status(updater, :rejected)
       :ok
     end

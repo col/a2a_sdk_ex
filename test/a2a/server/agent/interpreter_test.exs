@@ -3,8 +3,8 @@ defmodule A2A.Server.Agent.InterpreterTest do
 
   import A2A.Server.Agent.Result
   alias A2A.Server.Agent.Interpreter
-  alias A2A.Server.TaskUpdater
   alias A2A.Server.TaskStore.ETS, as: Store
+  alias A2A.Server.TaskUpdater
   alias A2A.Types.{Part, Task}
 
   setup do
