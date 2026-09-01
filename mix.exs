@@ -6,7 +6,7 @@ defmodule A2A.MixProject do
 
   def project do
     [
-      app: :a2a,
+      app: :a2a_sdk,
       version: @version,
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -74,9 +74,15 @@ defmodule A2A.MixProject do
 
   defp package do
     [
+      name: "a2a_sdk",
+      maintainers: ["Colin Harris"],
       licenses: ["Apache-2.0"],
-      links: %{"GitHub" => @source_url},
-      files: ~w(lib priv/proto/PROTO_VERSION mix.exs README.md)
+      links: %{
+        "GitHub" => @source_url,
+        "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md",
+        "A2A Protocol" => "https://a2a-protocol.org/v1.0.0/specification/"
+      },
+      files: ~w(lib priv/proto/PROTO_VERSION mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 
@@ -84,7 +90,15 @@ defmodule A2A.MixProject do
     [
       main: "readme",
       source_url: @source_url,
-      extras: ["README.md", "docs/superpowers/specs/2026-08-29-data-model-and-codec-design.md"]
+      source_ref: "v#{@version}",
+      extras: ["README.md", "CHANGELOG.md"],
+      groups_for_modules: [
+        Types: [~r/^A2A\.Types\./],
+        Codec: [A2A.JSON],
+        Server: [~r/^A2A\.Server(\.|$)/, A2A.Scope, A2A.User],
+        Transport: [~r/^A2A\.Plug\./, A2A.Standalone],
+        Errors: [A2A.Error]
+      ]
     ]
   end
 end

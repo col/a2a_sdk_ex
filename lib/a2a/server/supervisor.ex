@@ -1,23 +1,29 @@
 defmodule A2A.Server.Supervisor do
   @moduledoc """
   The mountable OTP tree for one A2A server: PubSub (optional — reuse the host's),
-  Registry, execution DynamicSupervisor, and the ETS TaskStore. Nothing is global;
-  a host app can start several under different `:name`s.
+  Registry, execution DynamicSupervisor, and the ETS TaskStore. Add it to your
+  application's supervision tree, giving it a unique `:name` and your
+  `A2A.Server.AgentExecutor` implementation:
 
-  Timeout options:
+      children = [
+        {Phoenix.PubSub, name: MyApp.PubSub},
+        {A2A.Server.Supervisor,
+         name: MyAgent, executor: MyExecutor, pubsub: MyApp.PubSub}
+      ]
+
+  Other options: `:store` (custom `A2A.Server.TaskStore`, default ETS-backed),
+  `:agent_card` (served at `/.well-known/agent-card.json`), `:scope` (default
+  tenant/owner scope), and `:push_notifications` (set `true` to enable push
+  config storage/dispatch). Timeouts:
 
     * `:drain_timeout` (default `:infinity`) — how long a *blocking* `SendMessage`
       waits on a silent task before giving up. Overridable per request.
     * `:stream_idle_timeout` (default `300_000`) — how long a *streaming* response
-      stays open with no events at all. Streams close at a terminal task state
-      (§3.1.2, §3.1.6), so a task parked at `input_required` that nobody answers
-      would otherwise hold its request process indefinitely — `A2A.Plug.SSE` can
-      only notice a client disconnect when it next tries to write a chunk. The
-      timeout fires only on total silence, so it never truncates a live stream.
-    * `:push_idle_timeout` (default `60_000`) — how long a task's `PushDispatcher`
-      survives with no events **and no execution running**. It garbage-collects
-      dispatchers for abandoned tasks; a task being worked on is never reaped,
-      however silent, and a reaped one is revived before a later turn broadcasts.
+      stays open with no events at all before closing (never truncates a live
+      stream; fires only on total silence).
+    * `:push_idle_timeout` (default `60_000`) — how long a task's push dispatcher
+      survives with no events and no execution running before it is collected (a
+      task being worked on is never reaped).
   """
   use Supervisor
 

@@ -1,5 +1,8 @@
 # a2a_sdk_ex
 
+[![Hex.pm](https://img.shields.io/hexpm/v/a2a_sdk.svg)](https://hex.pm/packages/a2a_sdk)
+[![Docs](https://img.shields.io/badge/hexdocs-docs-8e7ce6.svg)](https://hexdocs.pm/a2a_sdk)
+
 An Elixir SDK for building [Agent2Agent (A2A) Protocol](https://a2a-protocol.org/v1.0.0/specification/)
 servers — agentic applications that expose their capabilities over A2A, built on
 OTP for first-class streaming, cancellation, resumption, and webhook delivery.
@@ -9,9 +12,21 @@ A peer of the official [Python](https://github.com/a2aproject/a2a-python) and
 architectural seams — but designed for the Elixir/OTP ecosystem rather than
 ported line-by-line.
 
+## Installation
+
+Add `:a2a_sdk` to your `mix.exs` dependencies:
+
+```elixir
+def deps do
+  [
+    {:a2a_sdk, "~> 0.1.0"}
+  ]
+end
+```
+
 ## Try it
 
-Both HTTP bindings are mounted by [`examples/echo_server/`](examples/echo_server)
+Both HTTP bindings are mounted by [`examples/echo_server/`](https://github.com/col/a2a_sdk_ex/tree/main/examples/echo_server)
 (`mix run --no-halt` from that directory, port 5001). JSON-RPC:
 
 ```bash
@@ -40,7 +55,7 @@ curl -s http://localhost:5001/tasks | jq
 curl -s -X POST http://localhost:5001/tasks/<task-id>:cancel | jq
 ```
 
-See the example's own [README](examples/echo_server/README.md) for the full
+See the example's own [README](https://github.com/col/a2a_sdk_ex/blob/main/examples/echo_server/README.md) for the full
 walkthrough (agent card, streaming over both bindings).
 
 ### Push notifications
@@ -58,17 +73,17 @@ curl -s -X POST http://localhost:5001/tasks/<task-id>/pushNotificationConfigs \
 Each subsequent task event is POSTed to the webhook as a `StreamResponse`
 (`application/a2a+json`), same shape as an SSE frame. A host that enables push
 must also set `AgentCard.capabilities.push_notifications = true` to advertise
-support — see [ADR-0012](docs/architecture/decisions/0012-push-notifications.md).
+support — see [ADR-0012](https://github.com/col/a2a_sdk_ex/blob/main/docs/architecture/decisions/0012-push-notifications.md).
 
 ## Documentation
 
-- **[Architecture overview](docs/architecture.md)** — the high-level map: components, boundaries, invariants.
-- Detailed docs under [`docs/architecture/`](docs/architecture/): data model, process model, request handling, transports, streaming & events, persistence, cross-cutting concerns, scope & roadmap.
+- **[Architecture overview](https://github.com/col/a2a_sdk_ex/blob/main/docs/architecture.md)** — the high-level map: components, boundaries, invariants.
+- Detailed docs under [`docs/architecture/`](https://github.com/col/a2a_sdk_ex/tree/main/docs/architecture): data model, process model, request handling, transports, streaming & events, persistence, cross-cutting concerns, scope & roadmap.
 
 ## Design decisions
 
-The scope and shape of v1 are captured as Architecture Decision Records. 
-Full context and consequences for each: [decision records](docs/architecture/decisions/README.md).
+The scope and shape of v1 are captured as Architecture Decision Records.
+Full context and consequences for each: [decision records](https://github.com/col/a2a_sdk_ex/tree/main/docs/architecture/decisions).
 
 ## Requirements
 
@@ -112,4 +127,4 @@ BY TRANSPORT:
 
 ## License
 
-Licensed under the [Apache License, Version 2.0](LICENSE).
+Licensed under the [Apache License, Version 2.0](https://github.com/col/a2a_sdk_ex/blob/main/LICENSE).

@@ -1,5 +1,5 @@
 defmodule A2A.Server.TaskStore.ETS do
-  @moduledoc "Default ETS-backed `A2A.Server.TaskStore`. A GenServer owns a public named `:set` table."
+  @moduledoc false
   use GenServer
   @behaviour A2A.Server.TaskStore
 

@@ -1,15 +1,9 @@
 defmodule A2A.Error do
   @moduledoc """
-  A protocol-level error, and its rendering onto each binding's wire form.
-
-  Handlers return these tagged as `{:error, %A2A.Error{}}`; the transports call
-  `to_jsonrpc/1` or `to_rest/1`, two projections of the one code table below
-  (A2A specification §5.4, "Error Code Mappings").
-
-  Both bindings carry A2A-specific errors as a `google.rpc.ErrorInfo` — in the
-  JSON-RPC `error.data` array (§9.5) and in the AIP-193 `error.details` array
-  (§11.6). Standard JSON-RPC errors (`invalid_params`, `internal_error`) have no
-  A2A `reason`, so they carry no ErrorInfo.
+  A protocol-level error, returned as `{:error, %A2A.Error{}}` from server
+  handler functions. `to_jsonrpc/1` renders it as a JSON-RPC 2.0 error object;
+  `to_rest/1` renders it as `{http_status, body}` for the REST binding. Also
+  raisable/rescuable as an exception (`code`, `message`, `data`).
   """
   alias A2A.JSON.Naming
 

@@ -1,11 +1,9 @@
 defmodule A2A.Plug.REST do
   @moduledoc """
   HTTP+JSON/REST binding mechanics: build a typed request from path/query/body,
-  call `A2A.Server.DefaultHandler`, and tag the result for the router to render as
-  `application/json` (or an error via `A2A.Error.to_rest/1`). Transport
-  mechanics only — no `Plug.Conn`, no sockets. Streaming routes return a lazy
-  frame enumerable for `A2A.Plug.SSE` to chunk. Paths follow the vendored proto's
-  `google.api.http` annotations.
+  call `A2A.Server.DefaultHandler`, and tag the result for the router to render
+  (or an error via `A2A.Error.to_rest/1`). Transport mechanics only —
+  no `Plug.Conn`, no sockets.
   """
   alias A2A.Server.DefaultHandler
 

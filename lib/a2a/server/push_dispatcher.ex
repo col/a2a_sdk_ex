@@ -6,11 +6,7 @@ defmodule A2A.Server.PushDispatcher do
   awaiting all before the next event → per-task ordering. A slow/hung consumer
   blocks only this task (bounded by `push_timeout`); other tasks are unaffected.
   Best-effort: delivery failures are logged, never raised. Shuts down when the task
-  reaches a terminal state — not at the end of a turn, so a task parked at
-  `input_required` keeps delivering when the client answers — or after
-  `push_idle_timeout` of silence with **no execution running**. A task being worked
-  on is never reaped, however quiet it is; one nobody is working on is collected,
-  and revived by `DefaultHandler` before anything is broadcast for it again.
+  reaches a terminal state.
   """
   use GenServer, restart: :temporary
   require Logger

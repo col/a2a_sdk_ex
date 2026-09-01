@@ -2,7 +2,7 @@ defmodule A2A.Server.Events do
   @moduledoc """
   PubSub topic convention and the internal event envelope. Every executor-emitted
   event is broadcast as an `Event` on the task topic; SSE, resubscribe, and push
-  delivery (later phases) are all just additional subscribers.
+  delivery are all just additional subscribers.
   """
   alias A2A.Server.ResultAssembler
 
@@ -17,8 +17,8 @@ defmodule A2A.Server.Events do
   defmodule Event do
     @moduledoc """
     One frame on a task topic. Whether a frame ends a stream is derived from its
-    payload — see `A2A.Server.Events.final?/1` — never carried as a flag, so the
-    blocking rule (§3.2.2) and the streaming rule (§3.1.2, §3.1.6) cannot drift.
+    payload — never carried as a flag, so the blocking rule (§3.2.2) and the
+    streaming rule (§3.1.2, §3.1.6) cannot drift.
     """
     @type payload ::
             Task.t() | Message.t() | TaskStatusUpdateEvent.t() | TaskArtifactUpdateEvent.t()
