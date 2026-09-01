@@ -5,6 +5,7 @@ defmodule A2A.Server.RequestUserTest do
   alias A2A.Server.DefaultHandler
   alias A2A.Server.Supervisor, as: ServerSupervisor
   alias A2A.Server.TaskStore.ETS, as: TaskStoreETS
+  alias A2A.Test.CaptureUserExecutor
   alias A2A.Types.{Message, Part, SendMessageRequest}
   alias A2A.User
 
@@ -31,11 +32,11 @@ defmodule A2A.Server.RequestUserTest do
   test "the executor observes the resolved caller", %{server: server} do
     user = %User{id: "alice", authenticated?: true}
     {:ok, task} = send_as(server, user, "hi")
-    assert A2A.Test.CaptureUserExecutor.captured(task.id) == user
+    assert CaptureUserExecutor.captured(task.id) == user
   end
 
   test "an unconfigured caller is anonymous", %{server: server} do
     {:ok, task} = send_as(server, User.anonymous(), "hi")
-    assert A2A.Test.CaptureUserExecutor.captured(task.id) == User.anonymous()
+    assert CaptureUserExecutor.captured(task.id) == User.anonymous()
   end
 end

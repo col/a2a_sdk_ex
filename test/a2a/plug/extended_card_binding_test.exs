@@ -3,6 +3,7 @@ defmodule A2A.Plug.ExtendedCardBindingTest do
   import Plug.Test
   import Plug.Conn
 
+  alias A2A.Plug.REST
   alias A2A.Plug.Router
   alias A2A.Server.Supervisor, as: ServerSupervisor
   alias A2A.Types.{AgentCapabilities, AgentCard}
@@ -63,7 +64,7 @@ defmodule A2A.Plug.ExtendedCardBindingTest do
   # calling `A2A.Plug.REST` rather than routing through a second tree.
   test "not configured ⇒ FAILED_PRECONDITION / 400", %{name: name} do
     server = %{A2A.Server.handle(name) | extended_agent_card_resolver: nil}
-    assert {:error, 400, body} = A2A.Plug.REST.get_extended_agent_card(server)
+    assert {:error, 400, body} = REST.get_extended_agent_card(server)
     assert body["error"]["status"] == "FAILED_PRECONDITION"
   end
 end

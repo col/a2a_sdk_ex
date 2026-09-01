@@ -309,6 +309,18 @@ defmodule A2A.Server.DefaultHandler do
   @spec cancel_task(A2A.Server.t(), CancelTaskRequest.t()) ::
           {:ok, Task.t()} | {:error, A2A.Error.t()}
   def cancel_task(%A2A.Server{} = server, %CancelTaskRequest{id: id}) do
+    # Ownership gate: a task the caller's scope cannot see is TaskNotFound, exactly
+    # as for GetTask. This MUST precede the live-execution branch — the execution
+    # Registry is keyed by task_id alone (owner-agnostic), so without this read a
+    # caller could cancel another owner's in-flight task by id (the store key is the
+    # only thing that carries the owner).
+    case server.store.get(id, server.scope) do
+      {:ok, %Task{}} -> cancel_resolved(server, id)
+      {:error, :not_found} -> {:error, A2A.Error.not_found(id)}
+    end
+  end
+
+  defp cancel_resolved(server, id) do
     case Registry.lookup(server.registry, id) do
       [{pid, _}] ->
         try do

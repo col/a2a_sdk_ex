@@ -1,8 +1,8 @@
 defmodule A2A.Server.ForRequestTest do
   use ExUnit.Case, async: true
 
-  alias A2A.Server
   alias A2A.Scope
+  alias A2A.Server
   alias A2A.User
 
   defp base(overrides \\ %{}) do

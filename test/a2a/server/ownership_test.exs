@@ -3,9 +3,10 @@ defmodule A2A.Server.OwnershipTest do
 
   alias A2A.Server
   alias A2A.Server.DefaultHandler
+  alias A2A.Server.PushConfigStore.ETS, as: PushStoreETS
   alias A2A.Server.Supervisor, as: ServerSupervisor
   alias A2A.Server.TaskStore.ETS, as: TaskStoreETS
-  alias A2A.Server.PushConfigStore.ETS, as: PushStoreETS
+  alias A2A.Test.GatedExecutor
 
   alias A2A.Types.{
     CancelTaskRequest,
@@ -129,5 +130,48 @@ defmodule A2A.Server.OwnershipTest do
 
     assert {:ok, _} =
              DefaultHandler.get_task(as(server, other), %GetTaskRequest{id: task.id})
+  end
+
+  test "one owner cannot CancelTask another owner's LIVE task", %{server: server} do
+    # Regression for the security bug: cancel_task/2's live-execution branch used to
+    # look up the execution Registry by task_id ALONE (owner-agnostic) and cancel it
+    # without checking that the caller's owner scope can see the task. This proves
+    # bob cannot cancel alice's in-flight task by id, while alice's own cancel still
+    # succeeds.
+    alice_server = %{as(server, @alice) | executor: GatedExecutor, id_generator: fn -> "live1" end}
+    bob_server = %{as(server, @bob) | executor: GatedExecutor, id_generator: fn -> "live1" end}
+    caller = self()
+
+    spawn_link(fn ->
+      req = %SendMessageRequest{message: %Message{role: :user, parts: [Part.text("go")]}}
+      stream = DefaultHandler.send_message_stream(alice_server, req)
+      send(caller, {:frames, Enum.to_list(stream)})
+    end)
+
+    wait_for_task(alice_server, "live1")
+
+    assert {:error, %A2A.Error{code: :task_not_found}} =
+             DefaultHandler.cancel_task(bob_server, %CancelTaskRequest{id: "live1"})
+
+    assert {:ok, task} =
+             DefaultHandler.cancel_task(alice_server, %CancelTaskRequest{id: "live1"})
+
+    assert task.status.state == :canceled
+
+    assert_receive {:frames, _}, 2_000
+  end
+
+  defp wait_for_task(server, id, tries \\ 50) do
+    case server.store.get(id, server.scope) do
+      {:ok, _} ->
+        :ok
+
+      _ when tries > 0 ->
+        Process.sleep(20)
+        wait_for_task(server, id, tries - 1)
+
+      _ ->
+        flunk("task #{id} never appeared in store")
+    end
   end
 end

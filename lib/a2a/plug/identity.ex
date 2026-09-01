@@ -5,7 +5,10 @@ defmodule A2A.Plug.Identity do
   JSON-RPC and REST resolve identity identically. The `user_resolver` (a server
   option, default an anonymous user) does the work; the SDK does not itself verify
   credentials — a host authenticates in its own pipeline and the resolver converts
-  the request into an `A2A.User`.
+  the request into an `A2A.User`. The configured `user_resolver` MUST return an
+  `A2A.User` struct: this is a host contract, not a graceful fallback — returning
+  anything else raises and surfaces as a 500 (see ADR-0018's resolver-totality
+  stance).
 
   Agent-card discovery (`/.well-known/...`) is exempt: the public card names no
   caller.
