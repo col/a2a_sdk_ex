@@ -4,6 +4,7 @@ defmodule A2A.Client.Transport.JSONRPC do
 
   import A2A.Client.Transport, only: [base_headers: 2, http_opts: 3, run: 3]
   alias A2A.Client.Error, as: CErr
+  alias A2A.Client.SSE
 
   alias A2A.Types.{
     AgentCard,
@@ -11,6 +12,7 @@ defmodule A2A.Client.Transport.JSONRPC do
     ListTaskPushNotificationConfigsResponse,
     ListTasksResponse,
     SendMessageResponse,
+    StreamResponse,
     Task,
     TaskPushNotificationConfig
   }
@@ -101,7 +103,7 @@ defmodule A2A.Client.Transport.JSONRPC do
   # chunks :: Enumerable of raw binary body parts
   defp decode_stream(chunks) do
     chunks
-    |> A2A.Client.SSE.frames()
+    |> SSE.frames()
     |> Stream.map(&decode_frame/1)
   end
 
@@ -109,8 +111,7 @@ defmodule A2A.Client.Transport.JSONRPC do
   defp decode_frame(data) do
     case Jason.decode!(data) do
       %{"result" => result} ->
-        {:ok, %A2A.Types.StreamResponse{} = sr} =
-          A2A.JSON.from_json_map(result, A2A.Types.StreamResponse)
+        {:ok, %StreamResponse{} = sr} = A2A.JSON.from_json_map(result, StreamResponse)
 
         sr.task || sr.message || sr.status_update || sr.artifact_update
 

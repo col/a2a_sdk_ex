@@ -1,16 +1,16 @@
 defmodule A2A.Client.Transport.JSONRPCStreamTest do
   use ExUnit.Case, async: true
-  alias A2A.Client.Transport.JSONRPC
   alias A2A.Client.{Config, HTTP.Stub}
+  alias A2A.Client.Transport.JSONRPC
 
   alias A2A.Types.{
-    SendMessageRequest,
     Message,
     Part,
+    SendMessageRequest,
+    StreamResponse,
     Task,
     TaskStatus,
-    TaskStatusUpdateEvent,
-    StreamResponse
+    TaskStatusUpdateEvent
   }
 
   defp client, do: %A2A.Client{endpoint: "http://x/", config: Config.new(http_client: Stub)}
