@@ -1,23 +1,25 @@
 defmodule A2A.Server.ResultAssembler do
-  @moduledoc """
-  Folds a stream of domain events into the current `%A2A.Types.Task{}`.
-  Used both by `TaskUpdater` (to maintain its projection) and by the handler
-  (to assemble the value returned to the caller). Terminal tasks are immutable.
-  """
+  @moduledoc false
   alias A2A.Types.{Message, Task, TaskArtifactUpdateEvent, TaskStatus, TaskStatusUpdateEvent}
 
-  # Governs task freezing (see `apply/2`) and rejection of new work on a task
-  # that has already ended (see `DefaultHandler.reject_terminal/2`). Deliberately
-  # EXCLUDES `:input_required` — that state must remain resumable, unlike the
-  # `TaskUpdater` terminal set below, which ends the blocking drain on it too.
+  # Governs task freezing (see `apply/2`) and rejection of new work on a task that
+  # has already ended (see `DefaultHandler.resolve_task/2`). These four states are
+  # the spec's terminal set (§3.1.2, §3.1.6): the only states that close a stream.
+  # `:input_required` and `:auth_required` are INTERRUPTED, not terminal — they end
+  # a blocking caller's wait (§3.2.2) but leave the task resumable and the stream
+  # open. That rule lives in `DefaultHandler`, not here.
   @terminal_states [:completed, :failed, :canceled, :rejected]
+
+  @doc "Is this `TaskState` one of the four terminal states? The single source of that list."
+  @spec terminal_state?(atom()) :: boolean()
+  def terminal_state?(state), do: state in @terminal_states
 
   @spec init(String.t(), String.t() | nil) :: Task.t()
   def init(task_id, context_id),
     do: %Task{id: task_id, context_id: context_id, status: %TaskStatus{state: :submitted}}
 
   @spec terminal?(Task.t()) :: boolean()
-  def terminal?(%Task{status: %TaskStatus{state: s}}), do: s in @terminal_states
+  def terminal?(%Task{status: %TaskStatus{state: s}}), do: terminal_state?(s)
   def terminal?(%Task{}), do: false
 
   @spec apply(Task.t(), term()) :: Task.t()

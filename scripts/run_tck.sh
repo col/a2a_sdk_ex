@@ -52,6 +52,13 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# A server already on the port is not "ready" — it is a *different* server, very
+# likely running stale code. The readiness poll below cannot tell the two apart,
+# so a leftover process would silently be measured instead of this build.
+if lsof -nP -iTCP:"$SUT_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+  die 3 "port $SUT_PORT is already in use; stop that process (lsof -nP -iTCP:$SUT_PORT -sTCP:LISTEN) or set SUT_PORT"
+fi
+
 log "Booting SUT on port $SUT_PORT ..."
 ( cd "$SUT_DIR" && exec mix run --no-halt ) \
   >/tmp/a2a_sut.log 2>&1 &

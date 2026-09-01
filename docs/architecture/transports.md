@@ -64,16 +64,16 @@ Routes exposed today:
 | --- | --- | --- |
 | `GET /.well-known/agent-card.json` | Serve the `AgentCard` | [Data model](data-model.md) |
 | `POST /` | JSON-RPC endpoint (`SendMessage`, `SendStreamingMessage`, `GetTask`, `CancelTask`, `ListTasks`, `SubscribeToTask`; streaming methods respond as SSE) | below |
-| `POST /message:send` | REST: `SendMessage` (`application/a2a+json`) | below |
+| `POST /message:send` | REST: `SendMessage` (`application/json`) | below |
 | `POST /message:stream` | REST: `SendStreamingMessage` (SSE) | below |
-| `GET /tasks/:id` | REST: `GetTask` (`application/a2a+json`) | below |
-| `GET /tasks` | REST: `ListTasks` (`application/a2a+json`) | below |
-| `POST /tasks/:id:cancel` | REST: `CancelTask` (`application/a2a+json`) | below |
-| `GET /tasks/:id:subscribe` | REST: `SubscribeToTask` (SSE) | below |
-| `POST /tasks/:task_id/pushNotificationConfigs` | REST: `CreateTaskPushNotificationConfig` (`application/a2a+json`) | below |
-| `GET /tasks/:task_id/pushNotificationConfigs` | REST: `ListTaskPushNotificationConfigs` (`application/a2a+json`) | below |
-| `GET /tasks/:task_id/pushNotificationConfigs/:id` | REST: `GetTaskPushNotificationConfig` (`application/a2a+json`) | below |
-| `DELETE /tasks/:task_id/pushNotificationConfigs/:id` | REST: `DeleteTaskPushNotificationConfig` (`application/a2a+json`) | below |
+| `GET /tasks/:id` | REST: `GetTask` (`application/json`) | below |
+| `GET /tasks` | REST: `ListTasks` (`application/json`) | below |
+| `POST /tasks/:id:cancel` | REST: `CancelTask` (`application/json`) | below |
+| `GET`/`POST` `/tasks/:id:subscribe` | REST: `SubscribeToTask` (SSE) | below |
+| `POST /tasks/:task_id/pushNotificationConfigs` | REST: `CreateTaskPushNotificationConfig` (`application/json`) | below |
+| `GET /tasks/:task_id/pushNotificationConfigs` | REST: `ListTaskPushNotificationConfigs` (`application/json`) | below |
+| `GET /tasks/:task_id/pushNotificationConfigs/:id` | REST: `GetTaskPushNotificationConfig` (`application/json`) | below |
+| `DELETE /tasks/:task_id/pushNotificationConfigs/:id` | REST: `DeleteTaskPushNotificationConfig` (`application/json`) | below |
 
 Routes follow the vendored proto's `google.api.http` annotations exactly — no
 invented `/v1` prefix.
@@ -107,6 +107,19 @@ split that keeps server deps out of the graph for consumers who don't need them.
 ## REST (HTTP+JSON) binding — **landed**
 
 Landed per [ADR-0011](decisions/0011-rest-binding-and-cancel-list.md) —
+### Service parameters
+
+`A2A.Plug.ServiceParams` validates the parameters both bindings share (spec
+§3.2.6) — the `A2A-Version` the client is speaking and the request media type —
+as a router plug between `:match` and `:dispatch`, so a refusal is identical
+across bindings apart from its rendering. The checks are lenient about absence
+and strict about disagreement: an unstated version or media type is taken to be
+the one this SDK implements, and only a conflicting value is refused. Versions
+match on `Major.Minor` and may arrive as a header or an `A2A-Version` query
+parameter; agent-card discovery is exempt, since a client reads the card to
+learn which versions the agent speaks. See
+[ADR-0014](decisions/0014-request-validation-and-task-id-semantics.md).
+
 `A2A.Plug.REST` is the transport-mechanics twin of `A2A.Plug.JSONRPC`: build a
 typed request from path params + query + body via `A2A.JSON`, call
 `A2A.Server.DefaultHandler`, and tag the result for `A2A.Plug.Router` to
@@ -115,15 +128,46 @@ render.
 - Resource-style routes (see the table above), proto3-JSON request/response
   bodies via `A2A.JSON`. Routes follow the vendored proto's
   `google.api.http` annotations exactly — no invented `/v1` prefix.
-- Success responses use content type `application/a2a+json`.
+- Responses use content type `application/json`, per spec §11.1 ("Content-Type:
+  `application/json` for requests and responses"). The registered
+  `application/a2a+json` media type (§14.1.1, and the §6 examples) is
+  deliberately unused: it is not what the binding section requires, and a
+  client matching on the `application/json` subtype never sees it.
 - Errors render via `A2A.Error.to_rest/1` — `{http_status, body}` where `body`
-  is `google.rpc.Status` ProtoJSON (a `code` int, `message`, and a `details`
-  array with one `google.rpc.ErrorInfo`). See
+  is the AIP-193 representation §11.6 mandates: an `error` object whose `code`
+  is the HTTP status, `status` the gRPC status name, and `details` an array
+  carrying one `google.rpc.ErrorInfo`. See
   [Cross-cutting concerns](cross-cutting.md#errors) for the full status table.
 - Streaming routes (`message:stream`, `tasks/:id:subscribe`) use the same
   `A2A.Plug.SSE` core as JSON-RPC, via `SSE.respond/4`'s frame-formatter
   argument — REST passes a formatter that emits the bare `StreamResponse`
   ProtoJSON with no JSON-RPC envelope.
+- **`SubscribeToTask` is served on both `GET` and `POST`.** The authorities
+  disagree: spec §11.3.2's URL table lists `POST /tasks/{id}:subscribe`, while
+  the vendored proto annotates the same RPC `get:`. Following ADR-0013's
+  precedent the normative §11 text wins, but the proto form has shipped and
+  costs one route to keep, so both verbs reach the same handler rather than
+  betting on which one a client reads. Serving only `GET` cost three MUST
+  requirements (`STREAM-ORDER-002/003/004`): a conformant client POSTed, got a
+  404, and reported it as "stream received no events".
+- **The agent card carries cache validators** (spec §8.6.1): an `ETag`, a
+  `Last-Modified`, and a `304` on a matching `If-None-Match`. `A2A.Plug.Cache`
+  hashes the **served body** rather than the card's `version` field — a card
+  whose URL or capabilities changed without a version bump would otherwise keep
+  a validator asserting nothing changed, and a stale card is a worse failure
+  than a redundant fetch. `Last-Modified` is when the supervision tree was
+  configured, which is when the card was fixed. `If-Modified-Since` is not
+  honoured; RFC 9110 §13.1.3 makes `If-None-Match` the precedent validator
+  anyway.
+- **A `GET` carries its request parameters as camelCase query parameters**
+  (spec §11.5) — `GET /tasks/{id}?historyLength=10`, `GET /tasks?contextId=…`.
+  `historyLength` truncates the response's history only; the stored task is
+  untouched (ADR-0015).
+- **An unrouted path renders an AIP-193 404**, like every other error, rather
+  than an empty body. An empty-bodied refusal tells a client nothing and reads
+  as a transport fault — which is exactly how the routing gap above was
+  misdiagnosed. The code is `:method_not_found`, a standard JSON-RPC error, so
+  it carries no `ErrorInfo`.
 - One wire nuance: Plug's router treats a mid-segment `:` as a dynamic-param
   marker, so the proto's literal `:send`/`:stream` suffixes are written
   escaped in the router (`post "/message\:send"`), and `:cancel`/`:subscribe`
@@ -152,13 +196,33 @@ Streaming is where the OTP model pays off. The SSE handler:
    emits the bare `StreamResponse` ProtoJSON with no envelope. The
    subscribe/peek/chunk mechanics are shared — only the frame formatter
    differs.
-4. Ends when a terminal (or `input_required`) event arrives. A client
-   disconnect simply unsubscribes; because the execution process is independent
-   of the consumer, the task keeps running and can be re-attached via
-   `resubscribe`.
+4. Ends when a **task-terminal** event arrives — `completed`, `failed`,
+   `canceled`, `rejected` — or after a single direct `Message`
+   ([ADR-0017](decisions/0017-streams-terminate-at-task-terminal.md)). An
+   interrupted state (`input_required`, `auth_required`) does not close the
+   stream. A client disconnect simply unsubscribes; because the execution process
+   is independent of the consumer, the task keeps running and can be re-attached
+   via `resubscribe`.
 
 No async-generator `.return()`/`finally` dance is needed (the source of much
 complexity in the JS SDK) — unsubscribing is all that a disconnect requires.
+
+### Tune `stream_idle_timeout` for your infrastructure
+
+Because a stream now stays open across interrupted states, an SSE connection to a
+task parked awaiting input writes nothing until the client answers. Nothing else
+bounds it: `A2A.Plug.SSE` can only notice a disconnect when it next calls
+`Plug.Conn.chunk/2`, and **heartbeat frames are not implemented** — there is no
+periodic `: ping` keeping the socket warm. The only bound is
+`stream_idle_timeout` on `A2A.Server.Supervisor`, which defaults to `300_000`
+(5 minutes).
+
+Most reverse proxies and load balancers drop an idle connection well inside five
+minutes (nginx's `proxy_read_timeout` is 60s by default; several cloud load
+balancers use 60s too). A host behind one should set `stream_idle_timeout`
+**below** that cutoff, so the SDK closes the stream itself — cleanly, and with the
+subscription released — instead of the client discovering a socket the proxy
+already reset. Both example agents set `30_000` for exactly this reason.
 
 ## Transport selection & the agent card
 

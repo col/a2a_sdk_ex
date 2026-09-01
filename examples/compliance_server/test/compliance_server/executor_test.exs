@@ -50,6 +50,22 @@ defmodule ComplianceServer.ExecutorTest do
       assert %Task{status: %{state: :rejected}} = run(server, "tck-reject-task")
     end
 
+    test "tck-message-response answers with a Message and creates no task",
+         %{server: server} do
+      req = %SendMessageRequest{
+        message: %Message{
+          message_id: "tck-message-response-19af2c",
+          role: :user,
+          parts: [Part.text("TCK prerequisite task creation")]
+        }
+      }
+
+      assert {:ok, %A2A.Types.Message{parts: [%Part{text: text}]}} =
+               DefaultHandler.send_message(server, req)
+
+      assert text == "Direct message response"
+    end
+
     test "an unrecognised id completes the task like any other", %{server: server} do
       assert %Task{status: %{state: :completed}} = run(server, "tck-multi-004")
     end

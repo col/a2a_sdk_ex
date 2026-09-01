@@ -1,8 +1,29 @@
 defmodule A2A.Server.Supervisor do
   @moduledoc """
   The mountable OTP tree for one A2A server: PubSub (optional — reuse the host's),
-  Registry, execution DynamicSupervisor, and the ETS TaskStore. Nothing is global;
-  a host app can start several under different `:name`s.
+  Registry, execution DynamicSupervisor, and the ETS TaskStore. Add it to your
+  application's supervision tree, giving it a unique `:name` and your
+  `A2A.Server.AgentExecutor` implementation:
+
+      children = [
+        {Phoenix.PubSub, name: MyApp.PubSub},
+        {A2A.Server.Supervisor,
+         name: MyAgent, executor: MyExecutor, pubsub: MyApp.PubSub}
+      ]
+
+  Other options: `:store` (custom `A2A.Server.TaskStore`, default ETS-backed),
+  `:agent_card` (served at `/.well-known/agent-card.json`), `:scope` (default
+  tenant/owner scope), and `:push_notifications` (set `true` to enable push
+  config storage/dispatch). Timeouts:
+
+    * `:drain_timeout` (default `:infinity`) — how long a *blocking* `SendMessage`
+      waits on a silent task before giving up. Overridable per request.
+    * `:stream_idle_timeout` (default `300_000`) — how long a *streaming* response
+      stays open with no events at all before closing (never truncates a live
+      stream; fires only on total silence).
+    * `:push_idle_timeout` (default `60_000`) — how long a task's push dispatcher
+      survives with no events and no execution running before it is collected (a
+      task being worked on is never reaped).
   """
   use Supervisor
 
@@ -34,11 +55,16 @@ defmodule A2A.Server.Supervisor do
       scope: Keyword.get(opts, :scope, A2A.Scope.default()),
       id_generator: Keyword.get(opts, :id_generator, &A2A.Server.default_id/0),
       drain_timeout: Keyword.get(opts, :drain_timeout, :infinity),
+      stream_idle_timeout: Keyword.get(opts, :stream_idle_timeout, 300_000),
       agent_card: Keyword.get(opts, :agent_card),
+      # The card is fixed for the life of this tree, so "last modified" is when
+      # the tree was configured (spec §8.6.1 makes Last-Modified optional).
+      agent_card_modified_at: DateTime.utc_now(),
       push_notifications: push?,
       push_store: if(push?, do: Keyword.get(opts, :push_store, A2A.Server.PushConfigStore.ETS)),
       push_sender: if(push?, do: Keyword.get(opts, :push_sender, A2A.Server.PushSender.Default)),
       push_timeout: Keyword.get(opts, :push_timeout, 5_000),
+      push_idle_timeout: Keyword.get(opts, :push_idle_timeout, 60_000),
       push_url_validator:
         if(push?,
           do: Keyword.get(opts, :push_url_validator, PushSender.default_url_validator())

@@ -1,18 +1,5 @@
 defmodule A2A.Server.EventStream do
-  @moduledoc """
-  Shared subscription-backed event stream for a single task, used by both the
-  blocking and streaming delivery paths. A `Stream.resource/3` that subscribes to
-  the task topic on start, yields each `%A2A.Server.Events.Event{}` envelope in
-  publish order, and terminates on the union of three signals (see ADR-0009):
-
-    1. a terminal event (`terminal?: true` — terminal state or `input_required`);
-    2. the monitored execution process going `:DOWN` (deterministic crash/exit);
-    3. an idle timeout (`:infinity` disables it; defense-in-depth for a silent hang).
-
-  It always unsubscribes on halt and demonitors if it monitored. Yields the
-  **domain** envelope — no wire types here; the `StreamResponse` projection lives
-  in the streaming consumer.
-  """
+  @moduledoc false
   alias A2A.Server.Events
   alias A2A.Server.Events.Event
 
@@ -24,7 +11,7 @@ defmodule A2A.Server.EventStream do
 
     Stream.resource(
       fn -> start(pubsub, task_id, monitor_pid, subscribe?) end,
-      fn acc -> next(acc, idle_timeout) end,
+      fn acc -> next(acc, task_id, idle_timeout) end,
       fn acc -> stop(pubsub, task_id, acc) end
     )
   end
@@ -36,13 +23,17 @@ defmodule A2A.Server.EventStream do
   end
 
   # After a terminal event was yielded, the next pull halts.
-  defp next(%{halted?: true} = acc, _timeout), do: {:halt, acc}
+  defp next(%{halted?: true} = acc, _task_id, _timeout), do: {:halt, acc}
 
-  defp next(%{ref: ref} = acc, timeout) do
+  defp next(%{ref: ref} = acc, task_id, timeout) do
     receive do
-      %Event{terminal?: true} = e -> {[e], %{acc | halted?: true}}
-      %Event{} = e -> {[e], acc}
-      {:DOWN, ^ref, :process, _pid, _reason} -> {:halt, acc}
+      %Event{task_id: ^task_id, payload: payload} = e ->
+        if Events.final?(payload),
+          do: {[e], %{acc | halted?: true}},
+          else: {[e], acc}
+
+      {:DOWN, ^ref, :process, _pid, _reason} ->
+        {:halt, acc}
     after
       timeout -> {:halt, acc}
     end

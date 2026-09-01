@@ -1,10 +1,5 @@
 defmodule A2A.Server.PushSender.Default do
-  @moduledoc """
-  Default `A2A.Server.PushSender`. Serializes the `StreamResponse` as proto3-JSON
-  (`application/a2a+json`), builds auth headers from the config, and POSTs to the
-  webhook URL — via `Req` if loaded, else `:httpc`. Non-2xx and transport errors
-  return `{:error, reason}`; the caller (dispatcher) logs and drops them.
-  """
+  @moduledoc false
   @behaviour A2A.Server.PushSender
 
   alias A2A.Types.{StreamResponse, TaskPushNotificationConfig}

@@ -1,5 +1,5 @@
 defmodule A2A.Server.StreamFrame do
-  @moduledoc "Maps an `A2A.Server.Events.Event` payload to the matching `StreamResponse` arm. Shared by the streaming handler and the push dispatcher."
+  @moduledoc false
   alias A2A.Types.{Message, StreamResponse, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent}
 
   @spec of(Task.t() | Message.t() | TaskStatusUpdateEvent.t() | TaskArtifactUpdateEvent.t()) ::

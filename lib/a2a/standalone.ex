@@ -16,7 +16,7 @@ defmodule A2A.Standalone do
       router serves.
     * `:port` — convenience default for the listen port (`4000`). Equivalent to
       `bandit: [port: ...]`; a `:port` inside `:bandit` takes precedence.
-    * `:bandit` — a keyword list passed straight through to `Bandit.child_spec/1`,
+    * `:bandit` — a keyword list passed straight through to Bandit's child spec,
       giving access to Bandit's full option surface (scheme, TLS, ip, HTTP/1 and
       HTTP/2 tuning, `:thousand_island_options`, …). The `:plug` is always set by
       this module and cannot be overridden here.

@@ -5,33 +5,82 @@ defmodule A2A.Plug.Router do
 
       forward "/a2a", to: A2A.Plug.Router, init_opts: [server: MyAgent]
 
-  Routes: `GET /.well-known/agent-card.json` (serves the configured `AgentCard`);
-  `POST /` (JSON-RPC 2.0; streaming methods respond as Server-Sent Events); and
-  the REST routes (`A2A.Plug.REST`) — `POST /message:send`,
+  Routes: `GET /.well-known/agent-card.json` (serves the configured
+  `A2A.Types.AgentCard`); `POST /` (JSON-RPC 2.0; streaming methods respond as
+  Server-Sent Events); and the REST routes — `POST /message:send`,
   `POST /message:stream` (SSE), `GET /tasks`, `GET /tasks/:id`,
-  `GET /tasks/:id:subscribe` (SSE), `POST /tasks/:id:cancel` — following the
-  vendored proto's `google.api.http` paths. All protocol semantics live behind
-  `A2A.Server.RequestHandler`; this router only parses/renders the wire form.
+  `GET /tasks/:id:subscribe` (SSE), `POST /tasks/:id:cancel`. All protocol
+  semantics live behind `A2A.Server.RequestHandler`; this router only
+  parses/renders the wire form.
   """
   use Plug.Router, copy_opts_to_assign: :init_opts
 
-  alias A2A.Plug.{JSONRPC, REST, SSE}
+  alias A2A.Plug.{Cache, JSONRPC, REST, ServiceParams, SSE}
   alias A2A.Server.AgentCardURL
 
   plug(:match)
+  plug(:validate_service_params)
   plug(:dispatch)
+
+  # Service parameters are validated once, before dispatch, so both bindings
+  # refuse the same requests (A2A.Plug.ServiceParams). Agent-card discovery is
+  # exempt: a client has to read the card to learn which versions an agent
+  # speaks, so gating it on the version would be circular.
+  defp validate_service_params(%Plug.Conn{path_info: [".well-known" | _]} = conn, _opts), do: conn
+
+  defp validate_service_params(conn, _opts) do
+    case ServiceParams.check(conn) do
+      :ok -> conn
+      {:error, error} -> conn |> render_service_error(error) |> halt()
+    end
+  end
+
+  # `POST /` is the JSON-RPC binding; every other route is REST. The refusal
+  # happens before the envelope is parsed, so there is no request id to echo —
+  # JSON-RPC 2.0 uses a null id when it cannot be determined.
+  defp render_service_error(%Plug.Conn{path_info: []} = conn, error) do
+    send_json(conn, 200, %{"jsonrpc" => "2.0", "id" => nil, "error" => A2A.Error.to_jsonrpc(error)})
+  end
+
+  defp render_service_error(conn, error) do
+    {status, body} = A2A.Error.to_rest(error)
+    send_a2a(conn, status, body)
+  end
 
   get "/.well-known/agent-card.json" do
     server = A2A.Server.handle(conn.assigns.init_opts[:server])
 
     case server.agent_card do
-      nil ->
-        send_resp(conn, 404, "")
+      nil -> render_service_error(conn, no_agent_card())
+      card -> send_agent_card(conn, card, server.agent_card_modified_at)
+    end
+  end
 
-      card ->
-        conn
-        |> put_resp_content_type("application/json")
-        |> send_resp(200, A2A.JSON.encode!(AgentCardURL.resolve(card, conn)))
+  # Spec §8.6.1: the card should carry cache validators, since it changes far less
+  # often than clients fetch it. A conditional request that still matches gets a
+  # 304 carrying those same validators (RFC 9110 §15.4.5) and no body.
+  #
+  # Interface URLs are resolved from the request (A2A.Server.AgentCardURL) before
+  # encoding, so the ETag reflects the exact bytes served at this host/mount.
+  defp send_agent_card(conn, card, modified_at) do
+    body = A2A.JSON.encode!(AgentCardURL.resolve(card, conn))
+    etag = Cache.etag(body)
+
+    conn = validators(conn, etag, modified_at)
+
+    if Cache.fresh?(conn, etag) do
+      send_resp(conn, 304, "")
+    else
+      conn |> put_resp_content_type("application/json") |> send_resp(200, body)
+    end
+  end
+
+  defp validators(conn, etag, modified_at) do
+    conn = put_resp_header(conn, "etag", etag)
+
+    case modified_at do
+      %DateTime{} = at -> put_resp_header(conn, "last-modified", Cache.http_date(at))
+      nil -> conn
     end
   end
 
@@ -112,31 +161,57 @@ defmodule A2A.Plug.Router do
     server = A2A.Server.handle(conn.assigns.init_opts[:server])
 
     if String.ends_with?(id, ":subscribe") do
-      real = String.replace_suffix(id, ":subscribe", "")
-
-      case REST.subscribe(server, real) do
-        {:stream, enum} -> SSE.respond(conn, nil, enum, &REST.frame/2)
-        other -> render_rest(conn, other)
-      end
+      subscribe(conn, server, String.replace_suffix(id, ":subscribe", ""))
     else
-      render_rest(conn, REST.get_task(server, id))
+      conn = fetch_query_params(conn)
+      render_rest(conn, REST.get_task(server, id, conn.query_params))
     end
   end
 
   post "/tasks/:id" do
     server = A2A.Server.handle(conn.assigns.init_opts[:server])
 
-    if String.ends_with?(id, ":cancel") do
-      real = String.replace_suffix(id, ":cancel", "")
-      {:ok, body, conn} = read_body(conn)
-      render_rest(conn, REST.cancel_task(server, real, decode_body(body)))
-    else
-      send_resp(conn, 404, "")
+    cond do
+      String.ends_with?(id, ":cancel") ->
+        real = String.replace_suffix(id, ":cancel", "")
+        {:ok, body, conn} = read_body(conn)
+        render_rest(conn, REST.cancel_task(server, real, decode_body(body)))
+
+      # Spec 11.3.2 lists `POST /tasks/{id}:subscribe`, while the vendored proto
+      # annotates the same operation `get:`. The two authorities disagree, so both
+      # verbs are served rather than guessing which one a client will use.
+      String.ends_with?(id, ":subscribe") ->
+        subscribe(conn, server, String.replace_suffix(id, ":subscribe", ""))
+
+      true ->
+        not_found(conn)
     end
   end
 
   match _ do
-    send_resp(conn, 404, "")
+    not_found(conn)
+  end
+
+  defp subscribe(conn, server, task_id) do
+    case REST.subscribe(server, task_id) do
+      {:stream, enum} -> SSE.respond(conn, nil, enum, &REST.frame/2)
+      other -> render_rest(conn, other)
+    end
+  end
+
+  # An unrouted path is still an A2A error, and renders like one. An empty-bodied
+  # 404 tells a client nothing, and reads as a transport fault rather than a
+  # refusal — which is exactly how it was misdiagnosed once already.
+  # The route exists; this server was simply started without a card to serve.
+  defp no_agent_card do
+    %A2A.Error{code: :method_not_found, message: "this agent serves no agent card"}
+  end
+
+  defp not_found(conn) do
+    render_service_error(conn, %A2A.Error{
+      code: :method_not_found,
+      message: "no A2A route matches #{conn.method} #{conn.request_path}"
+    })
   end
 
   defp send_json(conn, status, map) do

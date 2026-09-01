@@ -13,11 +13,14 @@ defmodule A2A.Server do
           scope: A2A.Scope.t(),
           id_generator: (-> String.t()),
           drain_timeout: timeout_opt(),
+          stream_idle_timeout: timeout_opt(),
           agent_card: A2A.Types.AgentCard.t() | nil,
+          agent_card_modified_at: DateTime.t() | nil,
           push_notifications: boolean(),
           push_store: module() | nil,
           push_sender: module() | nil,
           push_timeout: timeout_opt(),
+          push_idle_timeout: timeout_opt(),
           push_url_validator: (String.t() -> :ok | {:error, term()}) | nil,
           push_registry: atom() | nil,
           push_dyn_sup: atom() | nil
@@ -32,14 +35,17 @@ defmodule A2A.Server do
     :scope,
     :id_generator,
     :agent_card,
+    :agent_card_modified_at,
     :push_store,
     :push_sender,
     :push_url_validator,
     :push_registry,
     :push_dyn_sup,
     drain_timeout: :infinity,
+    stream_idle_timeout: 300_000,
     push_notifications: false,
-    push_timeout: 5_000
+    push_timeout: 5_000,
+    push_idle_timeout: 60_000
   ]
 
   @spec handle(atom()) :: t()

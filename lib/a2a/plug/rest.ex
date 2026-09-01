@@ -1,11 +1,9 @@
 defmodule A2A.Plug.REST do
   @moduledoc """
   HTTP+JSON/REST binding mechanics: build a typed request from path/query/body,
-  call `A2A.Server.DefaultHandler`, and tag the result for the router to render as
-  `application/a2a+json` (or an error via `A2A.Error.to_rest/1`). Transport
-  mechanics only — no `Plug.Conn`, no sockets. Streaming routes return a lazy
-  frame enumerable for `A2A.Plug.SSE` to chunk. Paths follow the vendored proto's
-  `google.api.http` annotations.
+  call `A2A.Server.DefaultHandler`, and tag the result for the router to render
+  (or an error via `A2A.Error.to_rest/1`). Transport mechanics only —
+  no `Plug.Conn`, no sockets.
   """
   alias A2A.Server.DefaultHandler
 
@@ -16,6 +14,7 @@ defmodule A2A.Plug.REST do
     GetTaskRequest,
     ListTaskPushNotificationConfigsRequest,
     ListTasksRequest,
+    Message,
     SendMessageRequest,
     SendMessageResponse,
     SubscribeToTaskRequest,
@@ -23,7 +22,11 @@ defmodule A2A.Plug.REST do
     TaskPushNotificationConfig
   }
 
-  @content_type "application/a2a+json"
+  # Spec section 11.1 mandates `application/json` for REST requests and responses.
+  # `application/a2a+json` (registered in section 14.1.1, and used by the section 6
+  # examples) is deliberately not used here: it is not what the binding section
+  # requires, and it fails a client matching on the `application/json` subtype.
+  @content_type "application/json"
   @spec content_type() :: String.t()
   def content_type, do: @content_type
 
@@ -36,16 +39,29 @@ defmodule A2A.Plug.REST do
 
   def send_message(server, body) when is_map(body) do
     with {:ok, req} <- decode(body, SendMessageRequest),
-         {:ok, %Task{} = t} <- DefaultHandler.send_message(server, req) do
-      {:reply, 200, A2A.JSON.to_json_map(SendMessageResponse.task(t))}
+         {:ok, result} <- DefaultHandler.send_message(server, req) do
+      {:reply, 200, A2A.JSON.to_json_map(send_response(result))}
     else
       {:error, %A2A.Error{} = e} -> render_error(e)
       {:error, reason} -> bad_request(reason)
     end
   end
 
-  def get_task(server, id) do
-    case DefaultHandler.get_task(server, %GetTaskRequest{id: id}) do
+  # `SendMessageResponse` is a oneof: the agent either created a task or answered
+  # directly with a message (spec 3.1.1).
+  defp send_response(%Task{} = t), do: SendMessageResponse.task(t)
+  defp send_response(%Message{} = m), do: SendMessageResponse.message(m)
+
+  # Spec 11.5: a GET carries its request parameters as camelCase query
+  # parameters, so `?historyLength=n` is the REST spelling of the JSON-RPC
+  # request field. Both spellings are accepted, as elsewhere in this module.
+  def get_task(server, id, query \\ %{}) do
+    req = %GetTaskRequest{
+      id: id,
+      history_length: parse_int(query["historyLength"] || query["history_length"])
+    }
+
+    case DefaultHandler.get_task(server, req) do
       {:ok, %Task{} = t} -> {:reply, 200, A2A.JSON.to_json_map(t)}
       {:error, %A2A.Error{} = e} -> render_error(e)
     end
@@ -189,18 +205,12 @@ defmodule A2A.Plug.REST do
     {:error, status, body}
   end
 
+  # A decode failure is an ordinary A2A.Error, so it renders through the same
+  # AIP-193 projection as every other error rather than a hand-built body.
   defp bad_request(reason) do
-    {:error, 400,
-     %{
-       "code" => 3,
-       "message" => "invalid request: #{inspect(reason)}",
-       "details" => [
-         %{
-           "@type" => "type.googleapis.com/google.rpc.ErrorInfo",
-           "reason" => "INVALID_ARGUMENT",
-           "domain" => "a2a-protocol.org"
-         }
-       ]
-     }}
+    render_error(%A2A.Error{
+      code: :invalid_params,
+      message: "invalid request: #{inspect(reason)}"
+    })
   end
 end

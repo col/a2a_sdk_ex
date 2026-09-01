@@ -57,6 +57,29 @@ defmodule A2A.Server.TaskUpdater do
   @spec requires_input(t(), Message.t() | nil) :: t()
   def requires_input(u, message \\ nil), do: status(u, :input_required, message)
 
+  @doc """
+  Answers the caller directly with a `Message`, creating no task.
+
+  Spec §3.1.1: a send may return "a direct response message (for simple
+  interactions that don't require task tracking)", and §3.1.2 requires the
+  streaming form to be "exactly one Message object and then close immediately".
+  Nothing is persisted — there is no task to track — so this ends the
+  interaction: emitting anything else afterwards has no task to attach to.
+  """
+  @spec reply(t(), Part.t() | Message.t()) :: t()
+  def reply(u, %Part{} = part), do: reply(u, agent_message(u, part))
+
+  def reply(u, %Message{} = message) do
+    :ok =
+      Events.broadcast(u.pubsub, %Event{
+        task_id: u.task_id,
+        context_id: u.context_id,
+        payload: message
+      })
+
+    u
+  end
+
   @spec add_artifact(t(), Part.t() | Artifact.t(), keyword()) :: t()
   def add_artifact(u, part_or_artifact, opts \\ [])
 
@@ -77,7 +100,7 @@ defmodule A2A.Server.TaskUpdater do
       last_chunk: Keyword.get(opts, :last_chunk, true)
     }
 
-    emit(u, evt, false)
+    emit(u, evt)
   end
 
   # --- internal ---
@@ -93,15 +116,10 @@ defmodule A2A.Server.TaskUpdater do
       }
     }
 
-    # Governs ENDING THE BLOCKING DRAIN (the `Enum.reduce_while` fold over
-    # `A2A.Server.EventStream` in `DefaultHandler.drain_stream/5` / `fold_event/2`).
-    # Intentionally ADDS `:input_required` vs `ResultAssembler`'s freeze/terminal set —
-    # the drain must stop and return control to the caller when input is required,
-    # even though the task itself remains resumable (not frozen).
-    emit(u, evt, state in [:completed, :failed, :canceled, :rejected, :input_required])
+    emit(u, evt)
   end
 
-  defp emit(u, domain_event, terminal?) do
+  defp emit(u, domain_event) do
     task = ResultAssembler.apply(u.task, domain_event)
     :ok = u.store.save(task, u.scope)
 
@@ -109,8 +127,7 @@ defmodule A2A.Server.TaskUpdater do
       Events.broadcast(u.pubsub, %Event{
         task_id: u.task_id,
         context_id: u.context_id,
-        payload: domain_event,
-        terminal?: terminal?
+        payload: domain_event
       })
 
     %{u | task: task}

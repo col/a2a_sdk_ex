@@ -53,7 +53,7 @@ defmodule A2A.Server.TaskStore.ETSTest do
       refute "old" in Enum.map(tasks, & &1.id)
     end
 
-    test "is scope-isolated", %{scope: scope} do
+    test "is scope-isolated", %{scope: %A2A.Scope{} = scope} do
       other = %A2A.Scope{scope | owner: "someone-else"}
       :ok = ETS.save(task("z"), other)
       {:ok, tasks} = ETS.list(%{}, scope)

@@ -306,26 +306,29 @@ defmodule A2A.Test.Generators do
   end
 
   @doc """
-  A valid `A2A.Test.ReplayExecutor` script: zero or more non-terminal steps
+  A valid `A2A.Test.ReplayExecutor` script: zero or more intermediate steps
   (`{:status, :working | :auth_required}`, `{:artifact, text}`) followed by
-  exactly one terminal step (`{:status, terminal_state}`) — so a stream driven
-  by the script always halts (see `A2A.Server.EventStream`'s terminal-event signal).
+  exactly one step that ends the turn (`{:status, last_state}`) — one of the four
+  terminal states, or `input_required`, which parks the task instead.
   """
   @spec valid_event_script() :: StreamData.t([{:status, atom()} | {:artifact, String.t()}])
   def valid_event_script do
-    non_terminal_step =
+    intermediate_step =
       one_of([
         map(non_empty_string(), &{:artifact, &1}),
         member_of([{:status, :working}, {:status, :auth_required}])
       ])
 
-    terminal_state = member_of([:completed, :failed, :canceled, :rejected, :input_required])
+    # NOT all terminal states: `input_required` is an *interrupted* state, which ends
+    # a turn (and a blocking wait, §3.2.2) without ending the task or its streams
+    # (§3.1.2, §3.1.6). The mix is deliberate — do not collapse the two sets.
+    last_state = member_of([:completed, :failed, :canceled, :rejected, :input_required])
 
     gen all(
-          steps <- list_of(non_terminal_step, max_length: 5),
-          terminal <- terminal_state
+          steps <- list_of(intermediate_step, max_length: 5),
+          last <- last_state
         ) do
-      steps ++ [{:status, terminal}]
+      steps ++ [{:status, last}]
     end
   end
 end

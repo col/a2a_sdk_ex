@@ -66,7 +66,7 @@ tested place.
 | `fail/2` | terminal `failed` |
 | `reject/2` | terminal `rejected` |
 | `cancel/2` | terminal `canceled` |
-| `requires_input/2` | `input_required` (ends stream) |
+| `requires_input/2` | `input_required` (stream stays open) |
 | `requires_auth/2` | `auth_required` (stream stays open) |
 
 ## `RequestContext`
@@ -126,10 +126,11 @@ responsibilities:
 3. **Streaming:** map each event to a `StreamResponse` and yield it to the SSE
    plug; persist as it goes; the push sender (if configured) delivers in
    parallel as another subscriber.
-4. **Blocking:** drain the event stream to the terminal/`input_required` event
-   and return the final `Task` or `Message`. `auth_required` is special-cased:
-   return a snapshot immediately while draining continues in the background
-   (matches the JS SDK).
+4. **Blocking:** drain the event stream to a terminal event or an interrupted
+   status (`input_required`, `auth_required` — spec §3.2.2) and return the final
+   `Task` or `Message`. Both interrupted states end only the caller's wait; the
+   execution stays alive and any attached *stream* keeps running past this point
+   (§3.1.2, §3.1.6) — see [ADR-0017](decisions/0017-streams-terminate-at-task-terminal.md).
 5. **Non-blocking (polling):** return on the first `task`/`message` event; the
    client polls `GetTask` or attaches later via `resubscribe`.
 
@@ -137,7 +138,8 @@ responsibilities:
 
 `send_message/3` accepts an SDK-side `:drain_timeout` option that bounds how
 long the blocking drain (over `A2A.Server.EventStream`) waits before giving up
-on a task that never reaches a terminal/`input_required` event:
+on a task that never reaches a terminal state or an interrupted status
+(`input_required`, `auth_required`):
 
 ```elixir
 DefaultHandler.send_message(server, request, drain_timeout: 30_000)
@@ -157,9 +159,10 @@ DefaultHandler.send_message(server, request, drain_timeout: 30_000)
   part of the A2A wire protocol, so it stays out of `A2A.Types.*` and out of the
   request payload entirely.
 - `send_message_stream/2` and `resubscribe/2` do not use `drain_timeout` — they
-  always run their `EventStream` with `idle_timeout: :infinity`, since a
-  streaming/SSE consumer (not the drain loop) owns disconnect semantics; see
-  [ADR-0009](decisions/0009-eventstream-termination.md).
+  run their `EventStream` with `idle_timeout: server.stream_idle_timeout`
+  (default 5 minutes) instead, since these streams outlive any single turn and
+  stay open through `input_required`/`auth_required`; see
+  [ADR-0017](decisions/0017-streams-terminate-at-task-terminal.md).
 
 ### `cancel_task`: cooperative but authoritative
 
