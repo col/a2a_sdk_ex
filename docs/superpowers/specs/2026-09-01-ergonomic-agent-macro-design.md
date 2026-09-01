@@ -12,12 +12,12 @@ seam is the right primitive — it mirrors the official Python/JS SDKs' executor
 and gives full control over event ordering, chunking, and cancellation — but it
 is more ceremony than a simple agent needs.
 
-The comparison with the published `a2a` (actioncard) Hex package surfaced the
-gap: that library leads with a **runtime-style** `use A2A.Agent` macro whose
-`handle_message/2` returns plain values (`{:reply, parts}` …), which is far less
-code for the common case. This spec adds the equivalent ergonomic layer to this
-SDK **without** removing or weakening the low-level executor: a declarative DSL
-over a purely additive macro.
+This spec adds a **runtime-style** ergonomic layer over that primitive: a
+`use A2A.Server.Agent` macro whose single `handle_message/1` callback returns a
+declarative value describing the reply, letting a trivial agent skip the
+imperative `TaskUpdater` dance entirely. It is added **without** removing or
+weakening the low-level executor — a declarative DSL over a purely additive
+macro.
 
 The design goal is **best-of-both-worlds**: a five-line agent is possible, a
 richly-structured agent (named + metadata'd artifacts, streamed output,
@@ -87,8 +87,8 @@ result is interpreted through the existing `TaskUpdater`.
 - **`X-Forwarded-*` proxy header support** for URL resolution. The author pins a
   canonical `url` for proxied deployments; honoring forwarded headers is a
   possible later addition.
-- **Client**, telemetry, registry/fleet layers — separate future work from the
-  comparison, not part of this spec.
+- **Client**, telemetry, registry/fleet layers — separate future work, not part
+  of this spec.
 
 ## Author-facing surface
 
@@ -106,10 +106,15 @@ defmodule MyAgent do
   def handle_message(ctx) do
     reply()
     |> artifact("answer", "echo: " <> A2A.Server.RequestContext.user_input(ctx))
-    |> complete()
   end
 end
 ```
+
+No `complete()` — **the terminal is optional; a `Result` with no explicit
+terminal completes.** An author only names a terminal to pick a *non*-completed
+outcome (`input_required`/`reject`/`fail`) or to attach a completion
+message/metadata. This is the simple-case ergonomic win: declare your artifacts,
+done.
 
 - **Required callback:** `handle_message(RequestContext.t()) :: Result.t()`.
   Everything needed for multi-turn is on `ctx` — `ctx.message`, `ctx.task` (set
@@ -128,7 +133,7 @@ end
 | `artifact(r, name, parts, opts \\ [])` | Buffered artifact. `parts` = string \| `%Part{}` \| list; `opts`: `id`, `metadata`. | `add_artifact/3` (emitted in order, before terminal) |
 | `stream(r, name, enumerable, opts \\ [])` | One artifact delivered in chunks. Each element = string \| `%Part{}`. `opts`: `id`, `metadata`. | fold → `add_artifact/3` with `append: true`, `last_chunk: true` on final element |
 | `message(r, parts, opts \\ [])` | Set the terminal status message. `opts`: `metadata`. | carried onto the terminal status |
-| `complete(r, opts \\ [])` | Terminal `:completed`. `opts`: `message`, `metadata`. | `complete/…` |
+| `complete(r, opts \\ [])` | **Optional** terminal `:completed`. `opts`: `message`, `metadata`. Omitting any terminal completes with the same defaults. | `complete/…` |
 | `input_required(r, opts \\ [])` | Terminal-for-drain `:input_required` (task stays resumable). | `requires_input/…` |
 | `reject(r, reason \\ nil)` | Terminal `:rejected`. | `reject/…` |
 | `fail(r, reason)` | Terminal `:failed`. | `fail/…` |
@@ -155,7 +160,7 @@ def handle_message(_ctx) do
 end
 ```
 
-Streaming (the `{:stream, enumerable}` analog), composed with a buffered artifact:
+Streaming, composed with a buffered artifact:
 
 ```elixir
 def handle_message(msg) do
@@ -218,9 +223,11 @@ Fold, in order:
    element under a shared `artifact_id`, `last_chunk: true` on the final element.
    An empty stream emits a single empty `last_chunk` artifact (well-defined).
 3. Terminal → the matching `TaskUpdater` call, threading `message` + `metadata`.
-   Absent terminal defaults to `:completed` (documented; a `handle_message` that
-   returns `reply()` with no terminal is a completed task with whatever artifacts
-   it declared).
+   **The terminal is optional: a `Result` with no terminal set completes**
+   (`TaskUpdater.complete/1` with default message/metadata). A `handle_message`
+   that returns `reply()` with only artifacts — or even a bare `reply()` — is a
+   completed task. An explicit terminal is only needed to select a
+   non-completed outcome or to attach completion message/metadata.
 
 Invariants enforced here (belt-and-braces with `ResultAssembler`): artifacts
 before terminal (structural — terminal is applied last), exactly one terminal
@@ -381,7 +388,10 @@ frames whether the author used the macro or the raw behaviour.
 - **`script_name` fidelity behind nested forwards.** `conn.script_name` is
   correct for a single `forward`; deeply nested/custom mounts could differ. The
   pinned-`url` override is the escape hatch; documented.
-- **Default terminal.** We default a terminal-less `Result` to `:completed`.
-  Alternative was to raise; chose the lenient default because "declare artifacts,
-  done" is a reasonable minimal agent. Revisit if it hides bugs.
+- **Terminal-less completes (decided).** A terminal-less `Result` completes
+  rather than raising — a deliberate ergonomic choice so the simplest agents
+  ("declare artifacts, done", or even a bare `reply()`) need no terminal. The
+  cost is that a genuinely-forgotten terminal silently completes instead of
+  erroring; accepted, since "no terminal ⇒ completed" is the intuitive default
+  and the build-time guard still catches the opposite mistake (two terminals).
 ```
