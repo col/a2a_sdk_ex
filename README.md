@@ -1,5 +1,8 @@
 # a2a_sdk_ex
 
+[![Hex.pm](https://img.shields.io/hexpm/v/a2a_sdk.svg)](https://hex.pm/packages/a2a_sdk)
+[![Docs](https://img.shields.io/badge/hexdocs-docs-8e7ce6.svg)](https://hexdocs.pm/a2a_sdk)
+
 An Elixir SDK for building [Agent2Agent (A2A) Protocol](https://a2a-protocol.org/v1.0.0/specification/)
 servers — agentic applications that expose their capabilities over A2A, built on
 OTP for first-class streaming, cancellation, resumption, and webhook delivery.
@@ -19,6 +22,18 @@ ported line-by-line.
 > are implemented, with a runnable
 > [`examples/echo_server/`](examples/echo_server); multi-tenant scoping is the
 > next phase. Design under [`docs/`](docs/architecture.md).
+
+## Installation
+
+Add `:a2a_sdk` to your `mix.exs` dependencies:
+
+```elixir
+def deps do
+  [
+    {:a2a_sdk, "~> 0.1.0"}
+  ]
+end
+```
 
 ## Try it
 
