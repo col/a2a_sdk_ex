@@ -6,7 +6,7 @@ defmodule A2A.MixProject do
 
   def project do
     [
-      app: :a2a,
+      app: :a2a_sdk,
       version: @version,
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -74,9 +74,15 @@ defmodule A2A.MixProject do
 
   defp package do
     [
+      name: "a2a_sdk",
+      maintainers: ["Colin Harris (@col)"],
       licenses: ["Apache-2.0"],
-      links: %{"GitHub" => @source_url},
-      files: ~w(lib priv/proto/PROTO_VERSION mix.exs README.md)
+      links: %{
+        "GitHub" => @source_url,
+        "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md",
+        "A2A Protocol" => "https://a2a-protocol.org/v1.0.0/specification/"
+      },
+      files: ~w(lib priv/proto/PROTO_VERSION mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 

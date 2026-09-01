@@ -16,7 +16,7 @@ defmodule ComplianceServer.MixProject do
 
   defp deps do
     [
-      {:a2a, path: "../.."},
+      {:a2a_sdk, path: "../.."},
       {:bandit, "~> 1.5"},
       {:req, "~> 0.7"}
     ]
