@@ -31,6 +31,8 @@ defmodule A2A.Server.DefaultHandler do
   alias A2A.Server.Events.Event
 
   alias A2A.Types.{
+    AgentCapabilities,
+    AgentCard,
     CancelTaskRequest,
     DeleteTaskPushNotificationConfigRequest,
     GetTaskPushNotificationConfigRequest,
@@ -270,6 +272,38 @@ defmodule A2A.Server.DefaultHandler do
       {:error, :not_found} -> {:error, A2A.Error.not_found(id)}
     end
   end
+
+  @doc """
+  The authenticated extended card for the resolved caller. Returns
+  `:extended_agent_card_not_configured` unless the base card advertises
+  `capabilities.extended_agent_card` **and** an `extended_agent_card_resolver` is
+  configured **and** it returns a card for this user. No SDK-level auth rejection —
+  the resolver receives the (possibly anonymous) `server.user` and decides.
+  """
+  @spec get_extended_agent_card(A2A.Server.t()) ::
+          {:ok, AgentCard.t()} | {:error, A2A.Error.t()}
+  def get_extended_agent_card(%A2A.Server{} = server) do
+    with :ok <- ensure_extended_advertised(server),
+         resolver when is_function(resolver, 1) <- server.extended_agent_card_resolver,
+         %AgentCard{} = card <- resolver.(server.user) do
+      {:ok, card}
+    else
+      _ -> {:error, extended_not_configured()}
+    end
+  end
+
+  defp ensure_extended_advertised(%A2A.Server{
+         agent_card: %AgentCard{capabilities: %AgentCapabilities{extended_agent_card: true}}
+       }),
+       do: :ok
+
+  defp ensure_extended_advertised(_server), do: :error
+
+  defp extended_not_configured,
+    do: %A2A.Error{
+      code: :extended_agent_card_not_configured,
+      message: "this agent does not serve an authenticated extended card"
+    }
 
   @impl true
   @spec cancel_task(A2A.Server.t(), CancelTaskRequest.t()) ::

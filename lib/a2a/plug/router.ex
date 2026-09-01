@@ -142,6 +142,11 @@ defmodule A2A.Plug.Router do
     render_rest(conn, REST.list_tasks(server, conn.query_params))
   end
 
+  get "/extendedAgentCard" do
+    server = request_server(conn)
+    render_rest(conn, REST.get_extended_agent_card(server))
+  end
+
   post "/tasks/:task_id/pushNotificationConfigs" do
     server = request_server(conn)
     {:ok, body, conn} = read_body(conn)
