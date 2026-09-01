@@ -11,7 +11,8 @@ defmodule A2A.Client.Transport.Selector do
 
   @spec select(AgentCard.t(), [String.t()]) ::
           {:ok, {module(), String.t()}} | {:error, A2A.Error.t()}
-  def select(%AgentCard{supported_interfaces: ifaces}, preferred) when is_list(ifaces) do
+  def select(%AgentCard{supported_interfaces: interfaces}, preferred) do
+    ifaces = List.wrap(interfaces)
     card_bindings = Enum.map(ifaces, & &1.protocol_binding)
     priority = dedup_ci((preferred || []) ++ card_bindings)
 

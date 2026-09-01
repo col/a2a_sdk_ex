@@ -32,4 +32,9 @@ defmodule A2A.Client.Transport.SelectorTest do
     c = card([iface("GRPC", "http://x")])
     assert {:error, %A2A.Error{code: :unsupported_operation}} = Selector.select(c, [])
   end
+
+  test "nil supported_interfaces → unsupported_operation, not a crash" do
+    c = card(nil)
+    assert {:error, %A2A.Error{code: :unsupported_operation}} = Selector.select(c, [])
+  end
 end
