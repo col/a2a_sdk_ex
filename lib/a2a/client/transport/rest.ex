@@ -5,11 +5,14 @@ defmodule A2A.Client.Transport.REST do
   import A2A.Client.Transport, only: [base_headers: 2, http_opts: 3, run: 3]
   alias A2A.Client.Error, as: CErr
 
+  alias A2A.Client.SSE
+
   alias A2A.Types.{
     AgentCard,
     ListTaskPushNotificationConfigsResponse,
     ListTasksResponse,
     SendMessageResponse,
+    StreamResponse,
     Task,
     TaskPushNotificationConfig
   }
@@ -102,11 +105,45 @@ defmodule A2A.Client.Transport.REST do
   end
 
   @impl true
-  def send_message_stream(_c, _r, _o), do: raise("implemented in Task 9")
+  def send_message_stream(client, request, opts),
+    do: stream(client, :post, "/message:stream", A2A.JSON.encode!(request), opts)
+
   @impl true
-  def resubscribe(_c, _r, _o), do: raise("implemented in Task 9")
+  def resubscribe(client, request, opts),
+    do: stream(client, :post, "/tasks/" <> request.id <> ":subscribe", "{}", opts)
 
   # --- internals ---
+
+  defp stream(client, method, path, body, opts) do
+    headers = [{"accept", "text/event-stream"} | base_headers(client, opts)]
+
+    req = %{
+      method: method,
+      url: url(client, path, %{}),
+      headers: headers,
+      body: body,
+      opts: http_opts(client, opts, :stream)
+    }
+
+    case run(client, req, :stream) do
+      {:ok, %{status: s, body: chunks}} when s in 200..299 -> {:ok, decode_stream(chunks)}
+      {:ok, %{status: s, body: b}} -> {:error, CErr.from_rest(s, collect(b))}
+      {:error, %A2A.Error{}} = e -> e
+    end
+  end
+
+  defp decode_stream(chunks) do
+    chunks
+    |> SSE.frames()
+    |> Stream.map(fn data ->
+      {:ok, %StreamResponse{} = sr} = A2A.JSON.from_json_map(Jason.decode!(data), StreamResponse)
+      sr.task || sr.message || sr.status_update || sr.artifact_update
+    end)
+  end
+
+  # A non-2xx streaming response may carry its error body as chunks or binary.
+  defp collect(b) when is_binary(b), do: b
+  defp collect(chunks), do: chunks |> Enum.to_list() |> IO.iodata_to_binary()
 
   defp get(client, path, query, mod, opts) do
     req = %{
