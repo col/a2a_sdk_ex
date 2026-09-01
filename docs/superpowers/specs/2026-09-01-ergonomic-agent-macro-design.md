@@ -281,8 +281,11 @@ defaults** for anything omitted:
 - `capabilities`: auto-derived where unambiguous — `streaming: true` (the runtime
   always supports it); `push_notifications` left to the host to advertise
   (defaults to the card's own default, overridable via option).
-- `url`: left `nil` by default — resolved at serve time (below). An author may
-  pin a canonical `url` via option.
+- `supported_interfaces`: the A2A URL lives here, not at the card top level —
+  a list of `%A2A.Types.AgentInterface{url, protocol_binding, protocol_version}`,
+  one per binding. The default card seeds two interfaces (`protocol_binding:
+  "JSONRPC"` and `"HTTP+JSON"`, `protocol_version: "1.0"`) with **`url: nil`**,
+  resolved at serve time (below). An author may pin canonical URLs via option.
 
 Two overridable callbacks, invoked **in this order** at card-build time:
 
@@ -308,19 +311,24 @@ and are validated for required fields (`id`, `name`) at build time.
 
 ### Serve-time `url` resolution
 
-The stored card is a **template**; its `url` may be `nil`. A shared helper
-resolves the effective `url` when serving `/.well-known/agent-card.json`:
+The stored card is a **template**; each `supported_interfaces` entry's `url` may
+be `nil`. A shared helper fills them in when serving
+`/.well-known/agent-card.json`:
 
 ```elixir
 A2A.Server.AgentCardURL.resolve(card, conn) ::
-  # card.url when non-nil (author pinned a canonical/base URL) — used verbatim;
-  # otherwise derived from conn: "#{scheme}://#{host}[:#{port}]" <> mount_path
+  # for each %AgentInterface{} in card.supported_interfaces:
+  #   url when non-nil (author pinned) — used verbatim;
+  #   otherwise set to the request base derived from conn:
+  #     "#{scheme}://#{host}[:#{port}]" <> mount_path
 ```
 
 - **Mount path** from `conn.script_name` (the segments the host router consumed
   before forwarding), so a mounted `A2A.Plug.Router` reports the correct absolute
   URL. Standalone `script_name` is empty → root.
 - **Port** omitted when default for the scheme (80/http, 443/https).
+- Only interfaces with `url: nil` are filled; a non-nil `url` is left verbatim,
+  so an author can pin some bindings and derive others.
 - `A2A.Plug.Router`'s existing `get "/.well-known/agent-card.json"` clause calls
   the helper before encoding; the REST card path (if distinct) shares it.
 - This makes **both** deployment cases correct for the common (no-proxy) case
