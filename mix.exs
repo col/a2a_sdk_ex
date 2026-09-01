@@ -95,7 +95,7 @@ defmodule A2A.MixProject do
       groups_for_modules: [
         Types: [~r/^A2A\.Types\./],
         Codec: [A2A.JSON],
-        Server: [~r/^A2A\.Server\./],
+        Server: [~r/^A2A\.Server(\.|$)/, A2A.Scope, A2A.User],
         Transport: [~r/^A2A\.Plug\./, A2A.Standalone],
         Errors: [A2A.Error]
       ]

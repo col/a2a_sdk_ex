@@ -28,7 +28,7 @@ jobs:
       - name: Verify tag matches mix.exs version
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          APP_VSN=$(mix eval 'IO.puts(Mix.Project.config()[:version])')
+          APP_VSN=$(mix eval 'IO.puts(Mix.Project.config()[:version])' | tail -n1)
           echo "tag=$TAG mix.exs=$APP_VSN"
           if [ "$TAG" != "$APP_VSN" ]; then
             echo "::error::Tag v$TAG does not match mix.exs version $APP_VSN"
