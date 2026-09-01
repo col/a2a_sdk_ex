@@ -20,9 +20,9 @@ defmodule A2A.Client.Transport.JSONRPC do
   @impl true
   def send_message(client, request, opts) do
     with {:ok, result} <- call(client, "SendMessage", request, opts),
-         {:ok, %SendMessageResponse{} = r} <-
+         {:ok, %SendMessageResponse{} = response} <-
            to_result(A2A.JSON.from_json_map(result, SendMessageResponse)) do
-      {:ok, r.task || r.message}
+      {:ok, response.task || response.message}
     end
   end
 
@@ -33,44 +33,52 @@ defmodule A2A.Client.Transport.JSONRPC do
   def cancel_task(client, request, opts), do: unary(client, "CancelTask", request, Task, opts)
 
   @impl true
-  def list_tasks(client, request, opts),
-    do: unary(client, "ListTasks", request, ListTasksResponse, opts)
-
-  @impl true
-  def get_extended_agent_card(client, opts),
-    do: unary(client, "GetExtendedAgentCard", %GetExtendedAgentCardRequest{}, AgentCard, opts)
-
-  @impl true
-  def create_push_config(client, request, opts),
-    do: unary(client, "CreateTaskPushNotificationConfig", request, TaskPushNotificationConfig, opts)
-
-  @impl true
-  def get_push_config(client, request, opts),
-    do: unary(client, "GetTaskPushNotificationConfig", request, TaskPushNotificationConfig, opts)
-
-  @impl true
-  def list_push_configs(client, request, opts),
-    do:
-      unary(
-        client,
-        "ListTaskPushNotificationConfigs",
-        request,
-        ListTaskPushNotificationConfigsResponse,
-        opts
-      )
-
-  @impl true
-  def delete_push_config(client, request, opts) do
-    with {:ok, _result} <- call(client, "DeleteTaskPushNotificationConfig", request, opts), do: :ok
+  def list_tasks(client, request, opts) do
+    unary(client, "ListTasks", request, ListTasksResponse, opts)
   end
 
   @impl true
-  def send_message_stream(client, request, opts),
-    do: stream(client, "SendStreamingMessage", request, opts)
+  def get_extended_agent_card(client, opts) do
+    unary(client, "GetExtendedAgentCard", %GetExtendedAgentCardRequest{}, AgentCard, opts)
+  end
 
   @impl true
-  def resubscribe(client, request, opts),
-    do: stream(client, "SubscribeToTask", request, opts)
+  def create_push_config(client, request, opts) do
+    unary(client, "CreateTaskPushNotificationConfig", request, TaskPushNotificationConfig, opts)
+  end
+
+  @impl true
+  def get_push_config(client, request, opts) do
+    unary(client, "GetTaskPushNotificationConfig", request, TaskPushNotificationConfig, opts)
+  end
+
+  @impl true
+  def list_push_configs(client, request, opts) do
+    unary(
+      client,
+      "ListTaskPushNotificationConfigs",
+      request,
+      ListTaskPushNotificationConfigsResponse,
+      opts
+    )
+  end
+
+  @impl true
+  def delete_push_config(client, request, opts) do
+    with {:ok, _result} <- call(client, "DeleteTaskPushNotificationConfig", request, opts) do
+      :ok
+    end
+  end
+
+  @impl true
+  def send_message_stream(client, request, opts) do
+    stream(client, "SendStreamingMessage", request, opts)
+  end
+
+  @impl true
+  def resubscribe(client, request, opts) do
+    stream(client, "SubscribeToTask", request, opts)
+  end
 
   # --- internals ---
 
@@ -156,10 +164,11 @@ defmodule A2A.Client.Transport.JSONRPC do
     end
   end
 
-  defp to_result({:ok, v}), do: {:ok, v}
+  defp to_result({:ok, value}), do: {:ok, value}
 
-  defp to_result({:error, reason}),
-    do: {:error, %A2A.Error{code: :invalid_agent_response, message: inspect(reason)}}
+  defp to_result({:error, reason}) do
+    {:error, %A2A.Error{code: :invalid_agent_response, message: inspect(reason)}}
+  end
 
   # Returns {:ok, result_map} | {:error, A2A.Error.t()}
   defp call(client, method, request, opts) do

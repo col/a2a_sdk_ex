@@ -53,8 +53,9 @@ defmodule A2A.Client.Error do
   end
 
   # Fallback for a malformed/nonstandard error object missing "code" entirely.
-  def from_jsonrpc(err) when is_map(err),
-    do: %A2A.Error{code: :internal_error, message: Map.get(err, "message", "error")}
+  def from_jsonrpc(err) when is_map(err) do
+    %A2A.Error{code: :internal_error, message: Map.get(err, "message", "error")}
+  end
 
   @spec from_rest(integer(), map() | binary()) :: A2A.Error.t()
   def from_rest(status, body) when is_binary(body) do
@@ -75,8 +76,9 @@ defmodule A2A.Client.Error do
   def from_rest(status, _other), do: %A2A.Error{code: http_atom(status), message: "error"}
 
   @spec from_transport(term()) :: A2A.Error.t()
-  def from_transport(reason),
-    do: %A2A.Error{code: :internal_error, message: "transport error", data: reason}
+  def from_transport(reason) do
+    %A2A.Error{code: :internal_error, message: "transport error", data: reason}
+  end
 
   # The details/data array may carry a google.rpc.ErrorInfo; find it.
   defp error_info(list) when is_list(list),

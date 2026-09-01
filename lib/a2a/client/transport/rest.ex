@@ -52,8 +52,9 @@ defmodule A2A.Client.Transport.REST do
   end
 
   @impl true
-  def get_extended_agent_card(client, opts),
-    do: get(client, "/extendedAgentCard", %{}, AgentCard, opts)
+  def get_extended_agent_card(client, opts) do
+    get(client, "/extendedAgentCard", %{}, AgentCard, opts)
+  end
 
   @impl true
   def create_push_config(client, request, opts) do
@@ -64,26 +65,16 @@ defmodule A2A.Client.Transport.REST do
   end
 
   @impl true
-  def get_push_config(client, request, opts),
-    do:
-      get(
-        client,
-        "/tasks/" <> request.task_id <> "/pushNotificationConfigs/" <> request.id,
-        %{},
-        TaskPushNotificationConfig,
-        opts
-      )
+  def get_push_config(client, request, opts) do
+    path = "/tasks/" <> request.task_id <> "/pushNotificationConfigs/" <> request.id
+    get(client, path, %{}, TaskPushNotificationConfig, opts)
+  end
 
   @impl true
-  def list_push_configs(client, request, opts),
-    do:
-      get(
-        client,
-        "/tasks/" <> request.task_id <> "/pushNotificationConfigs",
-        %{},
-        ListTaskPushNotificationConfigsResponse,
-        opts
-      )
+  def list_push_configs(client, request, opts) do
+    path = "/tasks/" <> request.task_id <> "/pushNotificationConfigs"
+    get(client, path, %{}, ListTaskPushNotificationConfigsResponse, opts)
+  end
 
   @impl true
   def delete_push_config(client, request, opts) do
@@ -105,12 +96,14 @@ defmodule A2A.Client.Transport.REST do
   end
 
   @impl true
-  def send_message_stream(client, request, opts),
-    do: stream(client, :post, "/message:stream", A2A.JSON.encode!(request), opts)
+  def send_message_stream(client, request, opts) do
+    stream(client, :post, "/message:stream", A2A.JSON.encode!(request), opts)
+  end
 
   @impl true
-  def resubscribe(client, request, opts),
-    do: stream(client, :post, "/tasks/" <> request.id <> ":subscribe", "{}", opts)
+  def resubscribe(client, request, opts) do
+    stream(client, :post, "/tasks/" <> request.id <> ":subscribe", "{}", opts)
+  end
 
   # --- internals ---
 

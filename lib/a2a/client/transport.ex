@@ -42,9 +42,9 @@ defmodule A2A.Client.Transport do
               :ok | {:error, A2A.Error.t()}
 
   @spec base_headers(A2A.Client.Config.t(), opts) :: [{String.t(), String.t()}]
-  def base_headers(%A2A.Client.Config{} = cfg, opts) do
-    defaults = [{"content-type", "application/json"}, {"a2a-version", cfg.protocol_version}]
-    merge_headers(defaults ++ cfg.headers, Keyword.get(opts, :headers, []))
+  def base_headers(%A2A.Client.Config{} = config, opts) do
+    defaults = [{"content-type", "application/json"}, {"a2a-version", config.protocol_version}]
+    merge_headers(defaults ++ config.headers, Keyword.get(opts, :headers, []))
   end
 
   # Later (per-call) headers win on case-insensitive key.
@@ -55,14 +55,15 @@ defmodule A2A.Client.Transport do
   end
 
   @spec http_opts(client, opts, :unary | :stream) :: keyword()
-  def http_opts(%A2A.Client{config: cfg}, opts, :unary),
-    do: Keyword.merge(cfg.http_opts, timeout: Keyword.get(opts, :timeout, cfg.timeout))
+  def http_opts(%A2A.Client{config: config}, opts, :unary) do
+    Keyword.merge(config.http_opts, timeout: Keyword.get(opts, :timeout, config.timeout))
+  end
 
-  def http_opts(%A2A.Client{config: cfg}, opts, :stream),
-    do:
-      Keyword.merge(cfg.http_opts,
-        stream_timeout: Keyword.get(opts, :stream_timeout, cfg.stream_timeout)
-      )
+  def http_opts(%A2A.Client{config: config}, opts, :stream) do
+    Keyword.merge(config.http_opts,
+      stream_timeout: Keyword.get(opts, :stream_timeout, config.stream_timeout)
+    )
+  end
 
   @spec run(client, A2A.Client.HTTP.request(), :unary | :stream) ::
           {:ok, A2A.Client.HTTP.response()} | {:error, A2A.Error.t()}
