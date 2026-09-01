@@ -8,10 +8,19 @@ defmodule A2A.Client.SSE do
   @spec frames(Enumerable.t()) :: Enumerable.t()
   def frames(chunks) do
     chunks
-    |> Stream.transform("", &split_events/2)
+    |> Stream.transform(
+      fn -> "" end,
+      &split_events/2,
+      &flush_leftover/1,
+      fn _acc -> :ok end
+    )
     |> Stream.map(&event_data/1)
     |> Stream.reject(&(&1 == nil))
   end
+
+  # On stream exhaustion, flush a non-empty leftover buffer as a final event.
+  defp flush_leftover(""), do: {[], ""}
+  defp flush_leftover(buffer), do: {[buffer], ""}
 
   # Accumulate the buffer, emit each complete event (delimited by "\n\n").
   defp split_events(chunk, buffer) do
@@ -28,7 +37,7 @@ defmodule A2A.Client.SSE do
       |> String.split("\n")
       |> Enum.flat_map(fn line ->
         case line do
-          "data:" <> rest -> [String.trim_leading(rest, " ")]
+          "data:" <> rest -> [strip_one_leading_space(rest)]
           _ -> []
         end
       end)
@@ -38,4 +47,8 @@ defmodule A2A.Client.SSE do
       _ -> Enum.join(lines, "\n")
     end
   end
+
+  # SSE spec: strip at most one leading space from a field value, not all of them.
+  defp strip_one_leading_space(" " <> rest), do: rest
+  defp strip_one_leading_space(value), do: value
 end

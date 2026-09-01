@@ -23,4 +23,16 @@ defmodule A2A.Client.SSETest do
   test "multi-line data folds with newline joins" do
     assert collect(["data: a\ndata: b\n\n"]) == ["a\nb"]
   end
+
+  test "flushes a trailing event with no terminating blank line" do
+    assert collect(["data: 1\n\n", "data: 2"]) == ["1", "2"]
+  end
+
+  test "drops a trailing buffer with no data: line" do
+    assert collect(["data: 1\n\n", ": comment"]) == ["1"]
+  end
+
+  test "strips at most one leading space after data:" do
+    assert collect(["data:   x\n\n"]) == ["  x"]
+  end
 end
