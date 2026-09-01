@@ -28,19 +28,38 @@ Implemented as executor-wrapping middleware — a decorator function around
 
 The SDK **models** identity but does not implement authentication — actual
 credential verification stays in the host's plug pipeline, exactly as the Python
-and JS SDKs leave it to the web framework.
+and JS SDKs leave it to the web framework. Identity resolution, ownership
+isolation, and the authenticated extended card are landed; see
+[ADR-0018](decisions/0018-identity-ownership-and-extended-card.md).
 
 - `A2A.User` — a struct with `authenticated?` and `id`/`name`, plus arbitrary
   claims.
-- A `user_resolver` hook — `(Plug.Conn.t() -> A2A.User.t())` — configured at
-  init. The host authenticates however it likes (Bearer/JWT/session in its own
-  plug), and the resolver converts the request into an `A2A.User`.
-- The resolved user is placed on the [`RequestContext`](request-handling.md) so
-  the executor sees its caller, and feeds the owner resolver that scopes the
-  [`TaskStore`](persistence.md).
-
-Default resolver returns an unauthenticated user (single-tenant, open agents work
-with zero config).
+- `A2A.Plug.Identity`, a router plug that runs before dispatch (exempting
+  `/.well-known/…` agent-card discovery), calls the `user_resolver` hook —
+  `(Plug.Conn.t() -> A2A.User.t())` — and stashes the result on
+  `conn.private[:a2a_user]`. The host authenticates however it likes
+  (Bearer/JWT/session in its own plug); the resolver converts the request into
+  an `A2A.User`. Default resolver returns an unauthenticated user
+  (single-tenant, open agents work with zero config).
+- `A2A.Server.for_request/2` folds the resolved user, plus an owner-scoped
+  `A2A.Scope`, into a per-request server handle used for every operational
+  route. `RequestContext.user` carries the resolved caller.
+- `owner_resolver` — `(A2A.User.t() -> String.t() | nil)`, default `nil` —
+  derives `A2A.Scope.owner`. The ETS [`TaskStore`](persistence.md) and
+  `PushConfigStore` key entries by `{tenant, owner, id}`, so a caller whose
+  resolved owner doesn't match a task's owner doesn't find it. **Cross-owner
+  access returns `TaskNotFound`, not `403`** — the spec §5.4 error table has
+  no forbidden/permission-denied entry, and this also avoids leaking whether
+  a task exists but belongs to someone else. Default `owner_resolver` (`nil`
+  for everyone) collapses every task into one shared bucket, matching
+  pre-auth-phase behaviour.
+- `GetExtendedAgentCard` (JSON-RPC method `GetExtendedAgentCard`; REST `GET
+  /extendedAgentCard`) is backed by `extended_agent_card_resolver` —
+  `(A2A.User.t() -> A2A.Types.AgentCard.t() | nil)`, default none configured
+  — gated on capability + configuration + a non-`nil` result, else
+  `:extended_agent_card_not_configured`. There is no SDK-level auth rejection
+  of the request; the resolver receives the (possibly anonymous) user and
+  decides what to return.
 
 ## Telemetry
 
@@ -158,6 +177,8 @@ required global configuration**, so the whole tree composes inside a host app
 | `push_config_store` | `A2A.Server.PushConfigStore.ETS` |
 | `push_http_client` | `Req` (if present) |
 | `user_resolver` | unauthenticated user |
+| `owner_resolver` | `nil` (single shared bucket) |
+| `extended_agent_card_resolver` | none |
 | `id_generator` | UUID v4 |
 | `agent_card` | required |
 | `executor` | required |
@@ -168,6 +189,10 @@ required global configuration**, so the whole tree composes inside a host app
   later release; it needs real crypto + canonicalization work and is only needed
   by clients verifying card authenticity, not by an agent hosting itself. See
   [Scope and roadmap](scope-and-roadmap.md).
+- **Push notification JWT/JWKS signing** — same class of deferral as agent-card
+  signing (asymmetric crypto). Outbound push auth today is credential-passing
+  only (`Authorization` header, `X-A2A-Notification-Token`), not signed. See
+  [ADR-0018](decisions/0018-identity-ownership-and-extended-card.md).
 
 ## Related
 

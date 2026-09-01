@@ -84,6 +84,12 @@ and a hung sender is bounded by `push_timeout`. JSON-RPC
 `A2A.Error` when the server wasn't started with push enabled. A host must separately set
 `AgentCard.capabilities.push_notifications = true` to *advertise* support.
 
+The **auth phase** (ADR-0018) landed identity resolution (`user_resolver` →
+`A2A.Plug.Identity` → `RequestContext.user`), per-owner storage isolation
+(`owner_resolver`; cross-owner access ⇒ `TaskNotFound`, not `403`), and the
+authenticated `GetExtendedAgentCard` on both bindings; push outbound auth
+remains credential-passing only (JWT/JWKS notification signing deferred).
+
 `examples/` holds two runnable agents. Each has its **own `mix.exs`**
 (path-deps on this repo), runs standalone via `mix run --no-halt` from its own
 directory, and is **not** part of this repo's `mix test` or `mix precommit`.
