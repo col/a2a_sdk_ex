@@ -1,0 +1,41 @@
+name: Release
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # Gate: run the entire CI suite (matrix + proto + compliance) against the
+  # tagged commit. Publish only happens if this passes.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "29"
+          elixir-version: "1.20"
+
+      - run: mix deps.get
+
+      # Fail fast if the pushed tag does not match the version in mix.exs, so a
+      # mistyped or unbumped tag never publishes.
+      - name: Verify tag matches mix.exs version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          APP_VSN=$(mix eval 'IO.puts(Mix.Project.config()[:version])')
+          echo "tag=$TAG mix.exs=$APP_VSN"
+          if [ "$TAG" != "$APP_VSN" ]; then
+            echo "::error::Tag v$TAG does not match mix.exs version $APP_VSN"
+            exit 1
+          fi
+
+      - name: Publish to Hex
+        run: mix hex.publish --yes
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
