@@ -70,7 +70,7 @@ defmodule A2A.Server.DefaultHandler do
       task_id = message.task_id || server.id_generator.()
       context_id = context_id_for(existing, message, server)
       seed = seed_task(existing, task_id, context_id, message)
-      ctx = build_context(message, task_id, context_id, req)
+      ctx = build_context(server, message, task_id, context_id, req)
       maybe_register_inline_push(server, task_id, req)
       ensure_dispatcher_for_configured(server, task_id)
 
@@ -169,7 +169,7 @@ defmodule A2A.Server.DefaultHandler do
       task_id = message.task_id || server.id_generator.()
       context_id = context_id_for(existing, message, server)
       seed = seed_task(existing, task_id, context_id, message)
-      ctx = build_context(message, task_id, context_id, req)
+      ctx = build_context(server, message, task_id, context_id, req)
       maybe_register_inline_push(server, task_id, req)
       ensure_dispatcher_for_configured(server, task_id)
       :ok = Events.subscribe(server.pubsub, task_id)
@@ -369,13 +369,13 @@ defmodule A2A.Server.DefaultHandler do
     |> ResultAssembler.apply(message)
   end
 
-  defp build_context(message, task_id, context_id, req) do
+  defp build_context(server, message, task_id, context_id, req) do
     %RequestContext{
       message: message,
       task_id: task_id,
       context_id: context_id,
       task: nil,
-      user: A2A.User.anonymous(),
+      user: server.user,
       config: req.configuration || %{}
     }
   end

@@ -222,3 +222,27 @@ defmodule A2A.Test.GatedExecutor do
     end
   end
 end
+
+defmodule A2A.Test.CaptureUserExecutor do
+  @moduledoc "Records the RequestContext.user under the task id, then completes."
+  @behaviour A2A.Server.AgentExecutor
+  alias A2A.Server.TaskUpdater
+  alias A2A.Types.Part
+
+  @spec captured(String.t()) :: A2A.User.t() | nil
+  def captured(task_id), do: :persistent_term.get({__MODULE__, task_id}, nil)
+
+  @impl true
+  def execute(ctx, updater) do
+    :persistent_term.put({__MODULE__, ctx.task_id}, ctx.user)
+
+    updater
+    |> TaskUpdater.start_work()
+    |> TaskUpdater.complete(Part.text("done"))
+
+    :ok
+  end
+
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+end
