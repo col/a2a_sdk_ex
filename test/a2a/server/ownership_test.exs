@@ -60,6 +60,17 @@ defmodule A2A.Server.OwnershipTest do
   test "one owner cannot CancelTask another owner's task", %{server: server} do
     task = send_text(server, @alice, "hi")
 
+    # Positive control: the task is VISIBLE to its owner. EchoExecutor completes
+    # immediately, so cancel may return :task_not_cancelable — that still proves
+    # visibility. The point is it must NOT be :task_not_found for alice.
+    alice_result = DefaultHandler.cancel_task(as(server, @alice), %CancelTaskRequest{id: task.id})
+
+    refute match?({:error, %A2A.Error{code: :task_not_found}}, alice_result)
+
+    assert match?({:ok, %A2A.Types.Task{}}, alice_result) or
+             match?({:error, %A2A.Error{code: :task_not_cancelable}}, alice_result),
+           "expected alice's own cancel to be visible (ok or not_cancelable), got: #{inspect(alice_result)}"
+
     assert {:error, %A2A.Error{code: :task_not_found}} =
              DefaultHandler.cancel_task(as(server, @bob), %CancelTaskRequest{id: task.id})
   end
@@ -98,14 +109,13 @@ defmodule A2A.Server.OwnershipTest do
 
     {:ok, _} = DefaultHandler.create_push_config(as(server, @alice), cfg)
 
+    get_req = %A2A.Types.GetTaskPushNotificationConfigRequest{task_id: task.id, id: "c1"}
+
+    # Positive control: the config actually persisted and is readable by its owner.
+    assert {:ok, _} = DefaultHandler.get_push_config(as(server, @alice), get_req)
+
     assert {:error, %A2A.Error{code: :task_not_found}} =
-             DefaultHandler.get_push_config(
-               as(server, @bob),
-               %A2A.Types.GetTaskPushNotificationConfigRequest{
-                 task_id: task.id,
-                 id: "c1"
-               }
-             )
+             DefaultHandler.get_push_config(as(server, @bob), get_req)
   end
 
   test "identical owner ids share storage (proves the key, not the caller, isolates)", %{
