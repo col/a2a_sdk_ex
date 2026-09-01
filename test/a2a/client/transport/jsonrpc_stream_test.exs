@@ -51,9 +51,58 @@ defmodule A2A.Client.Transport.JSONRPCStreamTest do
           "error" => %{"code" => -32_001, "message" => "gone"}
         }) <> "\n\n"
 
-    Stub.put(%{{:post, "/"} => %{status: 200, headers: [], body: [err_frame]}})
+    Stub.put(%{
+      {:post, "/"} => %{
+        status: 200,
+        headers: [{"content-type", "text/event-stream"}],
+        body: [err_frame]
+      }
+    })
+
     msg = %Message{message_id: "m1", role: :user, parts: [Part.text("hi")]}
     {:ok, stream} = JSONRPC.send_message_stream(client(), %SendMessageRequest{message: msg}, [])
     assert_raise A2A.Error, fn -> Enum.to_list(stream) end
+  end
+
+  test "a pre-stream rejection (200, application/json, JSON-RPC error body) surfaces the decoded error" do
+    err_body =
+      Jason.encode!(%{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "error" => %{"code" => -32_001, "message" => "task not found"}
+      })
+
+    Stub.put(%{
+      {:post, "/"} => %{
+        status: 200,
+        headers: [{"content-type", "application/json"}],
+        body: err_body
+      }
+    })
+
+    msg = %Message{message_id: "m1", role: :user, parts: [Part.text("hi")]}
+
+    assert {:error, %A2A.Error{code: :task_not_found}} =
+             JSONRPC.send_message_stream(client(), %SendMessageRequest{message: msg}, [])
+  end
+
+  test "resubscribe also surfaces a pre-stream rejection" do
+    err_body =
+      Jason.encode!(%{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "error" => %{"code" => -32_001, "message" => "task not found"}
+      })
+
+    Stub.put(%{
+      {:post, "/"} => %{
+        status: 200,
+        headers: [{"content-type", "application/json"}],
+        body: err_body
+      }
+    })
+
+    assert {:error, %A2A.Error{code: :task_not_found}} =
+             JSONRPC.resubscribe(client(), %A2A.Types.SubscribeToTaskRequest{id: "t1"}, [])
   end
 end

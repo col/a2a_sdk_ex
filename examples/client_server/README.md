@@ -1,12 +1,13 @@
 # Client Server — A2A Elixir SDK example
 
-The integration SUT used by the client SDK's own test suite (see
-`test/a2a/client/integration_test.exs` in the main repo). Like `echo_server`
-it echoes back whatever text it receives, but it exists specifically to give
-the **client** something realistic to talk to: a dual-interface agent card
-(`JSONRPC` and `HTTP+JSON` at the same served URL), streaming turned on, and a
-simple bearer-token identity resolver feeding an authenticated
-`GetExtendedAgentCard`.
+A runnable reference agent demonstrating a dual-binding, auth-enabled server —
+useful for manually driving `A2A.Client` against something realistic. Like
+`echo_server` it echoes back whatever text it receives, but it's configured
+with a dual-interface agent card (`JSONRPC` and `HTTP+JSON` at the same served
+URL), streaming turned on, and a simple bearer-token identity resolver feeding
+an authenticated `GetExtendedAgentCard`. It is **not** wired into the client
+SDK's automated test suite, which builds its own in-process server tree (see
+`test/a2a/client_integration_test.exs` in the main repo).
 
 ## Run
 

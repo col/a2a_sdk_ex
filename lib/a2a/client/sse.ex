@@ -2,8 +2,9 @@ defmodule A2A.Client.SSE do
   @moduledoc """
   Minimal Server-Sent Events parser: turns a lazy enumerable of raw binary body
   chunks into a lazy enumerable of event `data` payloads. Events are separated by
-  a blank line; `data:` lines within an event are joined with `\\n`. Comment lines
-  (starting `:`) and other fields are ignored — the A2A wire uses only `data:`.
+  a blank line (`"\\n\\n"` or `"\\r\\n\\r\\n"`); `data:` lines within an event are
+  joined with `\\n`. Comment lines (starting `:`) and other fields are ignored —
+  the A2A wire uses only `data:`.
   """
   @spec frames(Enumerable.t()) :: Enumerable.t()
   def frames(chunks) do
@@ -22,9 +23,12 @@ defmodule A2A.Client.SSE do
   defp flush_leftover(""), do: {[], ""}
   defp flush_leftover(buffer), do: {[buffer], ""}
 
-  # Accumulate the buffer, emit each complete event (delimited by "\n\n").
+  # Accumulate the buffer, emit each complete event (delimited by a blank line,
+  # "\n\n" or "\r\n\r\n"). Normalizing "\r\n" -> "\n" per chunk before buffering
+  # is safe here: chunks arrive as whole HTTP body parts from our own SSE
+  # servers, so a "\r\n" pair is never split across a chunk boundary in practice.
   defp split_events(chunk, buffer) do
-    data = buffer <> chunk
+    data = buffer <> String.replace(chunk, "\r\n", "\n")
     parts = String.split(data, "\n\n")
     {complete, [rest]} = Enum.split(parts, -1)
     {complete, rest}
@@ -36,7 +40,7 @@ defmodule A2A.Client.SSE do
       event_block
       |> String.split("\n")
       |> Enum.flat_map(fn line ->
-        case line do
+        case String.trim_trailing(line, "\r") do
           "data:" <> rest -> [strip_one_leading_space(rest)]
           _ -> []
         end

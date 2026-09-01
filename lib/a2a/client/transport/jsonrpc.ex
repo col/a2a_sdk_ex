@@ -95,10 +95,40 @@ defmodule A2A.Client.Transport.JSONRPC do
       opts: http_opts(client, opts, :stream)
     }
 
-    with {:ok, %{body: chunks}} <- run(client, req, :stream) do
-      {:ok, decode_stream(chunks)}
+    with {:ok, resp} <- run(client, req, :stream) do
+      handle_stream_response(resp)
     end
   end
+
+  # A pre-stream rejection replies HTTP 200 with `content-type: application/json`
+  # carrying a JSON-RPC error envelope instead of an SSE body — detect that by
+  # content-type (not status, which JSON-RPC always answers 200) and surface the
+  # decoded `A2A.Error` instead of silently handing SSE.frames an empty stream.
+  defp handle_stream_response(%{headers: headers, body: body}) do
+    if event_stream?(headers) do
+      {:ok, decode_stream(body)}
+    else
+      decode_non_stream_body(body)
+    end
+  end
+
+  defp event_stream?(headers) do
+    Enum.any?(headers, fn {k, v} ->
+      String.downcase(k) == "content-type" and
+        String.contains?(String.downcase(v), "text/event-stream")
+    end)
+  end
+
+  defp decode_non_stream_body(body) do
+    case Jason.decode(collect(body)) do
+      {:ok, %{"error" => err}} -> {:error, CErr.from_jsonrpc(err)}
+      _ -> {:error, %A2A.Error{code: :invalid_agent_response, message: "expected SSE stream"}}
+    end
+  end
+
+  # The error body may arrive as a binary or as an enumerable of chunks.
+  defp collect(b) when is_binary(b), do: b
+  defp collect(chunks), do: chunks |> Enum.to_list() |> IO.iodata_to_binary()
 
   # chunks :: Enumerable of raw binary body parts
   defp decode_stream(chunks) do

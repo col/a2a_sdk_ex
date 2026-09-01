@@ -52,6 +52,10 @@ defmodule A2A.Client.Error do
     %A2A.Error{code: atom, message: message, data: metadata(info)}
   end
 
+  # Fallback for a malformed/nonstandard error object missing "code" entirely.
+  def from_jsonrpc(err) when is_map(err),
+    do: %A2A.Error{code: :internal_error, message: Map.get(err, "message", "error")}
+
   @spec from_rest(integer(), map() | binary()) :: A2A.Error.t()
   def from_rest(status, body) when is_binary(body) do
     case Jason.decode(body) do

@@ -74,7 +74,7 @@ The client is the dual: one `A2A.Client` facade **in front of** N transports.
   implementations, JSON-RPC and REST. Each builds the wire form via `A2A.JSON`,
   calls the HTTP layer, and decodes the response (or wire error) back to typed
   structs / `%A2A.Error{}`.
-- **`A2A.Client.HTTP`** — behaviour: `request/1` (unary) and `stream/2` (SSE).
+- **`A2A.Client.HTTP`** — behaviour: `request/1` (unary) and `stream/1` (SSE).
   `A2A.Client.HTTP.Req` is the shipped adapter (optional `:req` dep). Tests
   inject a stub. This is the sole HTTP-client seam — timeouts, retries, tracing,
   auth-refresh are all composed here by the user (e.g. `Req.Steps`), never in the
@@ -91,7 +91,7 @@ The client is the dual: one `A2A.Client` facade **in front of** N transports.
 | `A2A.Client.Transport.JSONRPC` | JSON-RPC 2.0 envelope build/parse, method dispatch, SSE frame decode |
 | `A2A.Client.Transport.REST` | REST path/query/body build, `application/json` + AIP-193 decode, SSE frame decode |
 | `A2A.Client.Transport.Selector` | Card interfaces × preference → `{transport_module, url}` |
-| `A2A.Client.HTTP` | Behaviour — `request/1`, `stream/2` (injectable) |
+| `A2A.Client.HTTP` | Behaviour — `request/1`, `stream/1` (injectable) |
 | `A2A.Client.HTTP.Req` | First-party Req adapter (optional dep) |
 | `A2A.Client.Error` | Decode wire errors → `%A2A.Error{}` (inverse of the §5.4 table) |
 
@@ -168,11 +168,14 @@ in this cut (a later `A2A.Client.Message.text/1`-style helper is additive).
 
 ## Behaviour: streaming
 
-`send_message_stream/3` and `resubscribe/3` return `{:ok, Enumerable.t()}` once
-the request is established. The enumerable is **lazy** — built with
-`Stream.resource/3` over the HTTP adapter's SSE stream — and yields decoded
-`%A2A.Types.*` **event structs** (`Task`, `TaskStatusUpdateEvent`,
-`TaskArtifactUpdateEvent`, `Message`), i.e. the arms of `StreamResponse`.
+`send_message_stream/3` and `resubscribe/3` issue the HTTP request **eagerly**
+before returning (the Req adapter calls `Req.request/1` with `into: :self`, so
+the connection is already open) and return `{:ok, Enumerable.t()}`. Only the
+*decoding* is lazy — `Stream.transform/4` (SSE framing via
+`A2A.Client.SSE.frames/1`) plus `Stream.map/2` (frame → decoded struct) over the
+adapter's async response body — yielding decoded `%A2A.Types.*` **event
+structs** (`Task`, `TaskStatusUpdateEvent`, `TaskArtifactUpdateEvent`,
+`Message`), i.e. the arms of `StreamResponse`.
 
 Contract, mirroring the server's SSE decisions:
 

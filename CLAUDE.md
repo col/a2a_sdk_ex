@@ -113,11 +113,13 @@ directory, and is **not** part of this repo's `mix test` or `mix precommit`.
 
 - **`echo_server/`** — the minimal readable example: echoes text back over both
   bindings. Keep it small; it is the "how do I write an agent" reference.
-- **`client_server/`** — the `A2A.Client` integration suite's SUT: a
-  dual-interface (JSON-RPC + REST) streaming agent configured with a
-  `user_resolver` + `extended_agent_card_resolver`, booted via
-  `A2A.Standalone`, so client auth and the extended card have a live target
-  to drive end-to-end.
+- **`client_server/`** — a runnable reference agent demonstrating a
+  dual-binding, auth-enabled server (dual-interface JSON-RPC + REST, streaming,
+  a `user_resolver` + `extended_agent_card_resolver`, booted via
+  `A2A.Standalone`) — useful for manually driving `A2A.Client` against
+  something realistic. It is **not** wired into the client SDK's automated
+  test suite, which builds its own in-process server tree
+  (`test/a2a/client_integration_test.exs`).
 - **`compliance_server/`** — the TCK's System Under Test. Implements the TCK's
   in-band SUT contract (behaviour selected by the request's `messageId` prefix,
   transcribed from the TCK's `scenarios/*.feature` into
@@ -201,8 +203,11 @@ track the gap, not gate on it.
 
 - **Client streaming enumerables must be enumerated once, in the calling
   process, same as the server side.** `A2A.Client.send_message_stream/3` and
-  `resubscribe/3` open the underlying HTTP connection at enumeration time;
-  enumerating elsewhere or not at all leaks the connection until GC. Halting
+  `resubscribe/3` open the underlying HTTP connection **eagerly**, before
+  returning (the default `A2A.Client.HTTP.Req` adapter calls `Req.request/1`
+  with `into: :self`); only the SSE-framing/decode step is lazy, running at
+  enumeration time via `Stream.transform/4`/`Stream.map/2`. Enumerating
+  elsewhere or not at all leaks the connection until GC. Halting
   the enumeration (e.g. breaking out of a `for`) **cancels the in-flight HTTP
   request** via the adapter's cancel path — it does not just stop reading.
 - **`A2A.Client.HTTP.Req` needs the optional `:req` dependency.** Without it

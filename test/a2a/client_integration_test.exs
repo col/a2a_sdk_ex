@@ -156,6 +156,72 @@ defmodule A2A.ClientIntegrationTest do
                    headers: [{"authorization", "Bearer secret"}]
                  )
       end
+
+      test "cancel_task on an already-completed task: EchoExecutor finishes synchronously, so cancel is not_cancelable",
+           %{client: client} do
+        msg = %Message{
+          message_id: "m4-#{unquote(binding)}",
+          role: :user,
+          parts: [Part.text("hi")]
+        }
+
+        assert {:ok, %A2A.Types.Task{id: id}} = Client.send_message(client, msg)
+        assert {:error, %A2A.Error{code: :task_not_cancelable}} = Client.cancel_task(client, id)
+      end
+
+      test "list_tasks returns a ListTasksResponse", %{client: client} do
+        msg = %Message{
+          message_id: "m5-#{unquote(binding)}",
+          role: :user,
+          parts: [Part.text("hi")]
+        }
+
+        assert {:ok, %A2A.Types.Task{}} = Client.send_message(client, msg)
+        assert {:ok, %A2A.Types.ListTasksResponse{}} = Client.list_tasks(client)
+      end
+
+      test "resubscribe to an already-terminal task: EchoExecutor finishes synchronously, so the task is terminal by the time we resubscribe",
+           %{client: client} do
+        msg = %Message{
+          message_id: "m6-#{unquote(binding)}",
+          role: :user,
+          parts: [Part.text("hi")]
+        }
+
+        assert {:ok, %A2A.Types.Task{id: id}} = Client.send_message(client, msg)
+
+        assert {:error, %A2A.Error{code: :unsupported_operation}} =
+                 Client.resubscribe(client, id)
+      end
+
+      test "push-config CRUD: server was started without push_notifications, so it errors :push_notification_not_supported",
+           %{client: client} do
+        msg = %Message{
+          message_id: "m7-#{unquote(binding)}",
+          role: :user,
+          parts: [Part.text("hi")]
+        }
+
+        assert {:ok, %A2A.Types.Task{id: task_id}} = Client.send_message(client, msg)
+
+        cfg = %A2A.Types.TaskPushNotificationConfig{
+          task_id: task_id,
+          id: "cfg1",
+          url: "https://example.com/webhook"
+        }
+
+        assert {:error, %A2A.Error{code: :push_notification_not_supported}} =
+                 Client.create_push_config(client, cfg)
+
+        assert {:error, %A2A.Error{code: :push_notification_not_supported}} =
+                 Client.get_push_config(client, task_id, "cfg1")
+
+        assert {:error, %A2A.Error{code: :push_notification_not_supported}} =
+                 Client.list_push_configs(client, task_id)
+
+        assert {:error, %A2A.Error{code: :push_notification_not_supported}} =
+                 Client.delete_push_config(client, task_id, "cfg1")
+      end
     end
   end
 end

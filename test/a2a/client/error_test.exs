@@ -31,6 +31,11 @@ defmodule A2A.Client.ErrorTest do
              CE.from_jsonrpc(%{"code" => -40_000, "message" => "weird"})
   end
 
+  test "jsonrpc error object missing \"code\" falls back to internal_error" do
+    assert %A2A.Error{code: :internal_error, message: "odd"} =
+             CE.from_jsonrpc(%{"message" => "odd"})
+  end
+
   test "rest body maps via ErrorInfo reason" do
     body = %{
       "error" => %{

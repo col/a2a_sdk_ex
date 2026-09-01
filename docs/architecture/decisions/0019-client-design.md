@@ -39,7 +39,7 @@ in front of N wire bindings, with HTTP itself behind an injectable seam.**
   / `%A2A.Error{}`. A `gRPC` adapter can join later behind the same
   behaviour with no facade change.
 - **`A2A.Client.HTTP`** is the sole HTTP-client seam: a behaviour with
-  `request/1` (unary) and `stream/2` (SSE). `A2A.Client.HTTP.Req` is the
+  `request/1` (unary) and `stream/1` (SSE). `A2A.Client.HTTP.Req` is the
   shipped adapter, gated on the already-optional `:req` dependency; a test or
   a host with different requirements injects any module implementing the
   behaviour. Timeouts, retries, tracing, and auth-refresh are composed at
@@ -61,11 +61,15 @@ in front of N wire bindings, with HTTP itself behind an injectable seam.**
   and implemented. Default is **server preference** (card order wins); a
   caller opts into client preference by setting `preferred_transports`. No
   overlap is `{:error, %A2A.Error{code: :unsupported_operation}}`.
-- **Streaming is a lazy enumerable that raises mid-stream.**
-  `send_message_stream/3` and `resubscribe/3` return `{:ok, Enumerable.t()}`
-  built with `Stream.resource/3` over the HTTP adapter's SSE stream, yielding
-  decoded `StreamResponse` arms (`Task`, `TaskStatusUpdateEvent`,
-  `TaskArtifactUpdateEvent`, `Message`). It must be **enumerated once, in the
+- **Streaming starts the request eagerly, decodes lazily, and raises
+  mid-stream.** `send_message_stream/3` and `resubscribe/3` issue the HTTP
+  request immediately (the default `A2A.Client.HTTP.Req` adapter calls
+  `Req.request/1` with `into: :self` before returning), then wrap the
+  adapter's async response body in `Stream.transform/4` (SSE framing,
+  `A2A.Client.SSE.frames/1`) plus `Stream.map/2` (frame → decoded
+  `StreamResponse` arm: `Task`, `TaskStatusUpdateEvent`,
+  `TaskArtifactUpdateEvent`, `Message`) — only that decode step is lazy,
+  running as the caller enumerates. It must be **enumerated once, in the
   calling process** (mirroring the server-side `EventStream` gotcha); halting
   the enumeration **cancels the underlying HTTP request**; a mid-stream
   protocol error (a `StreamResponse` frame carrying an error, on either

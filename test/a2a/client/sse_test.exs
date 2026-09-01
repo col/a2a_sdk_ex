@@ -35,4 +35,12 @@ defmodule A2A.Client.SSETest do
   test "strips at most one leading space after data:" do
     assert collect(["data:   x\n\n"]) == ["  x"]
   end
+
+  test "handles \\r\\n line endings and \\r\\n\\r\\n frame delimiters" do
+    assert collect(["data: 1\r\n\r\n", "data: 2\r\n\r\n"]) == ["1", "2"]
+  end
+
+  test "multi-line data with \\r\\n line endings folds with newline joins" do
+    assert collect(["data: a\r\ndata: b\r\n\r\n"]) == ["a\nb"]
+  end
 end
