@@ -9,17 +9,6 @@ A peer of the official [Python](https://github.com/a2aproject/a2a-python) and
 architectural seams — but designed for the Elixir/OTP ecosystem rather than
 ported line-by-line.
 
-> **Status:** the typed foundation, the server-core runtime — blocking
-> `SendMessage`, streaming `SendStreamingMessage` and `SubscribeToTask`, plus
-> `CancelTask` and `ListTasks` (shared `EventStream`, configurable drain
-> timeout) over the OTP process model — and both HTTP transports, JSON-RPC and
-> REST (`A2A.Plug.Router`/`A2A.Plug.JSONRPC`/`A2A.Plug.REST`/`A2A.Plug.SSE`,
-> optional `A2A.Standalone`), plus opt-in **push notifications** (config CRUD
-> on both bindings + best-effort webhook delivery, `push_notifications: true`),
-> are implemented, with a runnable
-> [`examples/echo_server/`](examples/echo_server); multi-tenant scoping is the
-> next phase. Design under [`docs/`](docs/architecture.md).
-
 ## Try it
 
 Both HTTP bindings are mounted by [`examples/echo_server/`](examples/echo_server)
@@ -35,7 +24,7 @@ curl -s http://localhost:5001/ \
   }' | jq
 ```
 
-REST — same call, resource-style, `application/a2a+json`:
+REST — same call, resource-style, `application/json`:
 
 ```bash
 curl -s http://localhost:5001/message:send \
@@ -71,28 +60,15 @@ Each subsequent task event is POSTed to the webhook as a `StreamResponse`
 must also set `AgentCard.capabilities.push_notifications = true` to advertise
 support — see [ADR-0012](docs/architecture/decisions/0012-push-notifications.md).
 
-## Design decisions
-
-The scope and shape of v1 are captured as Architecture Decision Records. In
-short:
-
-| Decision | Choice | ADR |
-| --- | --- | --- |
-| Scope | Server-side only (host an agent); client deferred | [0001](docs/architecture/decisions/0001-server-first-scope.md) |
-| Protocol | A2A v1.0 only; no v0.3 compat | [0002](docs/architecture/decisions/0002-target-v1.0-only.md) |
-| Transports | JSON-RPC + REST behind one handler; gRPC deferred | [0003](docs/architecture/decisions/0003-jsonrpc-and-rest-transports.md) |
-| Types | Hand-written idiomatic structs + a proto3-JSON codec | [0004](docs/architecture/decisions/0004-hand-written-types.md) |
-| Concurrency | Process-per-task + `Phoenix.PubSub` fan-out | [0005](docs/architecture/decisions/0005-pubsub-process-model.md) |
-| HTTP | Plug-first, mountable; Bandit standalone optional | [0006](docs/architecture/decisions/0006-plug-first-mounting.md) |
-| Persistence | `TaskStore` behaviour + ETS default; Ecto fast-follow | [0007](docs/architecture/decisions/0007-ets-task-store.md) |
-| v1 features | Streaming, cancel, resubscribe, push, extensions, auth | [0008](docs/architecture/decisions/0008-v1-feature-tiers.md) |
-
-Full context and consequences for each: [decision records](docs/architecture/decisions/README.md).
-
 ## Documentation
 
 - **[Architecture overview](docs/architecture.md)** — the high-level map: components, boundaries, invariants.
 - Detailed docs under [`docs/architecture/`](docs/architecture/): data model, process model, request handling, transports, streaming & events, persistence, cross-cutting concerns, scope & roadmap.
+
+## Design decisions
+
+The scope and shape of v1 are captured as Architecture Decision Records. 
+Full context and consequences for each: [decision records](docs/architecture/decisions/README.md).
 
 ## Requirements
 
@@ -101,6 +77,38 @@ Full context and consequences for each: [decision records](docs/architecture/dec
 
 The library is tested in CI across Elixir 1.18 / 1.19 / 1.20, each against the
 lowest OTP it supports at or above the OTP 26 floor.
+
+
+## Compatibility
+
+As of commit SHA: `f5d49108a92ba514ca70018f7340d0f510b267f2`
+
+```
+═══════════════════════════════════════════════════════
+             A2A TCK Compatibility Report
+═══════════════════════════════════════════════════════
+SUT: http://localhost:5002
+Timestamp: 2026-08-31T21:36:02.349739+00:00
+
+OVERALL COMPATIBILITY: 100.0%
+
+┌─────────────┬────────┬────────┬─────────┬───────┐
+│ Level       │ Passed │ Failed │ Skipped │ Total │
+├─────────────┼────────┼────────┼─────────┼───────┤
+│ MUST        │     82 │     21 │      11 │   114 │
+│ SHOULD      │      7 │      4 │       0 │    11 │
+│ MAY         │      4 │      0 │       0 │     4 │
+└─────────────┴────────┴────────┴─────────┴───────┘
+
+BY TRANSPORT:
+  agent_card:    10/10 ✓
+  grpc:          0/72 (72 skipped) ✓
+  jsonrpc:       95/102 (7 skipped) ✓
+  http_json:     90/96 (6 skipped) ✓
+
+═══════════════════════════════════════════════════════
+```
+
 
 ## License
 

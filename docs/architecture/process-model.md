@@ -100,7 +100,7 @@ task's dispatcher, never the executor or another task's delivery.
       requires_input│           │                │ requires_auth
                     ▼           │                ▼
            ┌────────────────┐   │        ┌───────────────┐
-           │ input_required │   │        │ auth_required │  (stream stays open)
+           │ input_required │   │        │ auth_required │
            └───────┬────────┘   │        └──────┬────────┘
        resume via  │            │   resume via  │
         SendMessage│            ▼               │ out-of-band creds
@@ -110,11 +110,11 @@ task's dispatcher, never the executor or another task's delivery.
                         └──────────────────────────────┘
 ```
 
-- **`input_required`** ends the current stream; the client resumes by sending
-  another `SendMessage` for the same task.
-- **`auth_required`** is special: it does **not** end the stream (matching the JS
-  SDK), because the executor may resume after credentials are injected
-  out-of-band. See invariant 6 in the [top-level doc](../architecture.md).
+- **`input_required`** and **`auth_required`** both leave the stream open — only
+  a terminal task state closes it. The client resumes `input_required` by sending
+  another `SendMessage` for the same task; `auth_required` resumes when the
+  executor picks back up after credentials are injected out-of-band. See
+  [ADR-0017](decisions/0017-streams-terminate-at-task-terminal.md).
 - **Terminal states are immutable.** Once reached, the task is never mutated and
   the execution process exits normally.
 

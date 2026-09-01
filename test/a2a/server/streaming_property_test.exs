@@ -19,7 +19,15 @@ defmodule A2A.Server.StreamingPropertyTest do
     name = :"srv_prop_#{System.unique_integer([:positive])}"
     pubsub = :"pubsub_prop_#{System.unique_integer([:positive])}"
 
-    start_supervised!({A2A.Server.Supervisor, name: name, executor: ReplayExecutor, pubsub: pubsub})
+    start_supervised!({
+      A2A.Server.Supervisor,
+      # `valid_event_script/0` can end on `input_required`, which (correctly,
+      # per §3.1.2) does not close the stream — only a short idle timeout does,
+      # since nothing further is ever emitted after the script runs out. Matches
+      # the sibling "wait for silence" timeouts (150ms/250ms) used elsewhere in
+      # this commit, rather than a tighter value with no margin of its own.
+      name: name, executor: ReplayExecutor, pubsub: pubsub, stream_idle_timeout: 250
+    })
 
     %{server: A2A.Server.handle(name)}
   end
@@ -30,13 +38,13 @@ defmodule A2A.Server.StreamingPropertyTest do
       task_id = "prop_#{System.unique_integer([:positive])}"
       :ok = ReplayExecutor.load(task_id, events)
 
+      # The ReplayExecutor is keyed by task id, so the id is pinned through the
+      # server's generator — spec 3.4.2 forbids a client-supplied taskId for
+      # creating a task.
+      server = %{server | id_generator: fn -> task_id end}
+
       req = %SendMessageRequest{
-        message: %Message{
-          message_id: "m_#{task_id}",
-          role: :user,
-          task_id: task_id,
-          parts: [Part.text("go")]
-        }
+        message: %Message{message_id: "m_#{task_id}", role: :user, parts: [Part.text("go")]}
       }
 
       frames = server |> DefaultHandler.send_message_stream(req) |> Enum.to_list()

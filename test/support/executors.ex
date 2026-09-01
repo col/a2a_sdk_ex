@@ -25,6 +25,22 @@ defmodule A2A.Test.EchoExecutor do
       )
 end
 
+defmodule A2A.Test.ReplyExecutor do
+  @moduledoc "Answers directly with a Message, creating no task (spec 3.1.1)."
+  @behaviour A2A.Server.AgentExecutor
+  alias A2A.Server.TaskUpdater
+  alias A2A.Types.Part
+
+  @impl true
+  def execute(_ctx, updater) do
+    TaskUpdater.reply(updater, Part.text("direct reply"))
+    :ok
+  end
+
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+end
+
 defmodule A2A.Test.SilentExecutor do
   @moduledoc "Emits nothing and blocks, to exercise the idle drain timeout."
   @behaviour A2A.Server.AgentExecutor
@@ -35,7 +51,7 @@ defmodule A2A.Test.SilentExecutor do
 end
 
 defmodule A2A.Test.AuthThenInputExecutor do
-  @moduledoc "Emits auth_required (non-terminal) then input_required (stops the stream)."
+  @moduledoc "Emits auth_required, then input_required."
   @behaviour A2A.Server.AgentExecutor
   alias A2A.Server.TaskUpdater
 
@@ -47,6 +63,65 @@ defmodule A2A.Test.AuthThenInputExecutor do
     |> TaskUpdater.requires_input()
 
     :ok
+  end
+
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+end
+
+defmodule A2A.Test.SlowCompleteExecutor do
+  @moduledoc "Emits `working`, then works silently for 300ms before completing — a task whose only quiet gap is the agent thinking."
+  @behaviour A2A.Server.AgentExecutor
+  alias A2A.Server.TaskUpdater
+  alias A2A.Types.Part
+
+  @impl true
+  def execute(_ctx, updater) do
+    u = TaskUpdater.start_work(updater)
+    Process.sleep(300)
+    TaskUpdater.complete(u, Part.text("done"))
+
+    :ok
+  end
+
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+end
+
+defmodule A2A.Test.InputRequiredExecutor do
+  @moduledoc "Parks at input_required — the resumable shape a multi-turn exchange starts from."
+  @behaviour A2A.Server.AgentExecutor
+  alias A2A.Server.TaskUpdater
+
+  @impl true
+  def execute(_ctx, updater) do
+    updater
+    |> TaskUpdater.start_work()
+    |> TaskUpdater.requires_input()
+
+    :ok
+  end
+
+  @impl true
+  def cancel(_ctx, _updater), do: :ok
+end
+
+defmodule A2A.Test.AuthOnlyExecutor do
+  @moduledoc "Parks at auth_required and stays alive — an interrupted, resumable task."
+  @behaviour A2A.Server.AgentExecutor
+  alias A2A.Server.TaskUpdater
+
+  @impl true
+  def execute(_ctx, updater) do
+    updater
+    |> TaskUpdater.start_work()
+    |> TaskUpdater.update_status(:auth_required)
+
+    # Stay alive: `auth_required` means the executor is waiting for out-of-band
+    # credentials, so the execution process must still be running when the
+    # blocking caller returns. Bounded rather than `:infinity` so the unlinked
+    # child does not outlive the test run (and so Dialyzer sees a normal return).
+    Process.sleep(2_000)
   end
 
   @impl true

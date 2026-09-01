@@ -3,6 +3,21 @@ defmodule A2A.Server.Supervisor do
   The mountable OTP tree for one A2A server: PubSub (optional — reuse the host's),
   Registry, execution DynamicSupervisor, and the ETS TaskStore. Nothing is global;
   a host app can start several under different `:name`s.
+
+  Timeout options:
+
+    * `:drain_timeout` (default `:infinity`) — how long a *blocking* `SendMessage`
+      waits on a silent task before giving up. Overridable per request.
+    * `:stream_idle_timeout` (default `300_000`) — how long a *streaming* response
+      stays open with no events at all. Streams close at a terminal task state
+      (§3.1.2, §3.1.6), so a task parked at `input_required` that nobody answers
+      would otherwise hold its request process indefinitely — `A2A.Plug.SSE` can
+      only notice a client disconnect when it next tries to write a chunk. The
+      timeout fires only on total silence, so it never truncates a live stream.
+    * `:push_idle_timeout` (default `60_000`) — how long a task's `PushDispatcher`
+      survives with no events **and no execution running**. It garbage-collects
+      dispatchers for abandoned tasks; a task being worked on is never reaped,
+      however silent, and a reaped one is revived before a later turn broadcasts.
   """
   use Supervisor
 
@@ -34,11 +49,16 @@ defmodule A2A.Server.Supervisor do
       scope: Keyword.get(opts, :scope, A2A.Scope.default()),
       id_generator: Keyword.get(opts, :id_generator, &A2A.Server.default_id/0),
       drain_timeout: Keyword.get(opts, :drain_timeout, :infinity),
+      stream_idle_timeout: Keyword.get(opts, :stream_idle_timeout, 300_000),
       agent_card: Keyword.get(opts, :agent_card),
+      # The card is fixed for the life of this tree, so "last modified" is when
+      # the tree was configured (spec §8.6.1 makes Last-Modified optional).
+      agent_card_modified_at: DateTime.utc_now(),
       push_notifications: push?,
       push_store: if(push?, do: Keyword.get(opts, :push_store, A2A.Server.PushConfigStore.ETS)),
       push_sender: if(push?, do: Keyword.get(opts, :push_sender, A2A.Server.PushSender.Default)),
       push_timeout: Keyword.get(opts, :push_timeout, 5_000),
+      push_idle_timeout: Keyword.get(opts, :push_idle_timeout, 60_000),
       push_url_validator:
         if(push?,
           do: Keyword.get(opts, :push_url_validator, PushSender.default_url_validator())

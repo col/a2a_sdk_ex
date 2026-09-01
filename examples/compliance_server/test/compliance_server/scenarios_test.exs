@@ -15,7 +15,8 @@ defmodule ComplianceServer.ScenariosTest do
     {"tck-artifact-file-url", :artifact_file_url},
     {"tck-artifact-data", :artifact_data},
     {"tck-input-required", :input_required},
-    {"tck-reject-task", :reject_task}
+    {"tck-reject-task", :reject_task},
+    {"tck-message-response", :message_response}
   ]
 
   @streaming [
@@ -47,11 +48,6 @@ defmodule ComplianceServer.ScenariosTest do
       # `tck-error-code-005` — and expects ordinary task behaviour.
       assert Scenarios.resolve("tck-multi-004-19af2c") == :default
       assert Scenarios.resolve("whatever") == :default
-    end
-
-    test "falls back to :default for the unimplemented message-response scenario" do
-      # Returning a bare Message needs an SDK path that does not exist yet.
-      assert Scenarios.resolve("tck-message-response-19af2c") == :default
     end
 
     test "falls back to :default when the message carries no id" do

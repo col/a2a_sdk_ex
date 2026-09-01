@@ -3,7 +3,7 @@ defmodule A2A.Plug.RouterTest do
   import Plug.Test
   import Plug.Conn
 
-  alias A2A.Plug.Router
+  alias A2A.Plug.{Cache, Router}
   alias A2A.Server.Supervisor, as: ServerSupervisor
   alias A2A.Server.TaskStore.ETS, as: TaskStoreETS
   alias A2A.Types.{AgentCard, Message, Part, SendMessageRequest}
@@ -33,6 +33,69 @@ defmodule A2A.Plug.RouterTest do
     conn = Router.call(conn(:get, "/.well-known/agent-card.json"), opts)
     assert conn.status == 200
     assert {:ok, %AgentCard{name: "Echo"}} = A2A.JSON.decode(conn.resp_body, AgentCard)
+  end
+
+  describe "agent card caching (spec §8.6)" do
+    test "the card carries validators a client can revalidate against", %{opts: opts} do
+      conn = Router.call(conn(:get, "/.well-known/agent-card.json"), opts)
+
+      assert conn.status == 200
+      assert [etag] = get_resp_header(conn, "etag")
+      # A strong validator, quoted per RFC 9110.
+      assert etag =~ ~r/^"[a-f0-9]+"$/
+      assert [_last_modified] = get_resp_header(conn, "last-modified")
+      assert [cache_control] = get_resp_header(conn, "cache-control")
+      assert cache_control =~ "max-age"
+    end
+
+    test "the etag is stable across requests", %{opts: opts} do
+      fetch = fn -> Router.call(conn(:get, "/.well-known/agent-card.json"), opts) end
+
+      assert [etag] = get_resp_header(fetch.(), "etag")
+      assert [^etag] = get_resp_header(fetch.(), "etag")
+    end
+
+    test "the etag is the served body's validator", %{opts: opts} do
+      conn = Router.call(conn(:get, "/.well-known/agent-card.json"), opts)
+
+      assert [etag] = get_resp_header(conn, "etag")
+      assert etag == Cache.etag(conn.resp_body)
+      refute etag == Cache.etag(conn.resp_body <> " ")
+    end
+
+    test "a matching If-None-Match gets 304 with no body", %{opts: opts} do
+      conn = Router.call(conn(:get, "/.well-known/agent-card.json"), opts)
+      assert [etag] = get_resp_header(conn, "etag")
+
+      revalidated =
+        conn(:get, "/.well-known/agent-card.json")
+        |> put_req_header("if-none-match", etag)
+        |> Router.call(opts)
+
+      assert revalidated.status == 304
+      assert revalidated.resp_body == ""
+      # RFC 9110 §15.4.5: a 304 carries the validators the client would cache.
+      assert [^etag] = get_resp_header(revalidated, "etag")
+    end
+
+    test "a stale If-None-Match gets the card", %{opts: opts} do
+      conn =
+        conn(:get, "/.well-known/agent-card.json")
+        |> put_req_header("if-none-match", ~s("stale"))
+        |> Router.call(opts)
+
+      assert conn.status == 200
+      assert Jason.decode!(conn.resp_body)["name"]
+    end
+
+    test "If-None-Match: * always matches an existing card", %{opts: opts} do
+      conn =
+        conn(:get, "/.well-known/agent-card.json")
+        |> put_req_header("if-none-match", "*")
+        |> Router.call(opts)
+
+      assert conn.status == 304
+    end
   end
 
   test "GET agent card 404s when no card configured" do

@@ -49,26 +49,30 @@ primitive, `A2A.Server.EventStream` — a `Stream.resource/3` that subscribes to
 the task topic and yields envelopes until it halts. Stream termination is the
 union of three signals, not just a terminal event:
 
-1. a **terminal** event (`completed`/`failed`/`canceled`/`rejected`, or
-   `input_required`);
-2. the execution process going **`:DOWN`** (deterministic crash/exit handling);
-3. an **idle timeout** (defense-in-depth against a silent hang; `:infinity` by
-   default for streaming).
+1. a **final** event — one whose payload closes a stream per `Events.final?/1`: a
+   terminal task state (`completed`/`failed`/`canceled`/`rejected`), or a direct
+   `Message` reply (§3.1.2 pattern 1);
+2. the execution process going **`:DOWN`** — opt-in via `:monitor`, and passed only
+   by the blocking drain, since a stream outlives any single turn's process;
+3. an **idle timeout** — `stream_idle_timeout` (default 5 minutes) for streaming,
+   `drain_timeout` (default `:infinity`, per-request overridable) for blocking.
 
-**Do not** stop on **`auth_required`** — the executor may resume after
-out-of-band credential injection. This asymmetry is intentional and matches the
-JS SDK. See [ADR-0009](decisions/0009-eventstream-termination.md) for the full
-rationale (why three signals, why `:infinity` is safe, why blocking and
-streaming can share one implementation).
+**Do not** stop a stream on an **interrupted** state (`input_required`,
+`auth_required`). Those end a *blocking* caller's wait (§3.2.2) — the rule lives in
+`DefaultHandler.fold_event/2` — while the stream stays open for the next turn or
+for out-of-band credential injection. See
+[ADR-0017](decisions/0017-streams-terminate-at-task-terminal.md).
 
 ## Resubscription
 
-`SubscribeToTask` is simply a new SSE subscription to an **already-live**
-topic. It works because the execution process outlives any single consumer
-(invariant 2 in the [top-level doc](../architecture.md)): a client that dropped
-its stream — or a *different* client entirely — can attach and receive
-subsequent events. The reference SDKs need a `taskId → bus` manager map to make
-this possible; here the `Registry` + PubSub topic provide it directly.
+`SubscribeToTask` is simply a new SSE subscription to the task's topic, live or
+not: the topic is keyed by task id and outlives any single turn's execution
+process, so `resubscribe/2` no longer needs to find a live execution to attach
+to — it just subscribes. A client that dropped its stream — or a *different*
+client entirely — can attach at any point, including after the task has parked
+at `input_required`/`auth_required` between turns, and receive subsequent
+events. The reference SDKs need a `taskId → bus` manager map to make this
+possible; here the PubSub topic provides it directly.
 
 `resubscribe/2` also consumes `A2A.Server.EventStream` (with `subscribe?: false`,
 since it owns the subscription itself to interleave it with a store read —

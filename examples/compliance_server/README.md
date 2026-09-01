@@ -44,6 +44,7 @@ holds one clause per scenario. When the TCK adds a scenario, add the prefix to
 | `tck-artifact-data` | Complete with a data artifact |
 | `tck-input-required` | Leave the task in `input_required` |
 | `tck-reject-task` | Reject the task |
+| `tck-message-response` | Answer with a bare `Message`, creating no task |
 | `tck-stream-001/002/003` | Stream `working` → artifact → `completed` |
 | `tck-stream-ordering-001` | Same, for event-ordering checks |
 | `tck-stream-artifact-text/-file` | Stream a text / file artifact |
@@ -59,13 +60,6 @@ Two ordering rules are load-bearing in the executor:
 - **Longest prefix wins.** `tck-artifact-file` is a prefix of
   `tck-artifact-file-url`; matching in declaration order silently resolves every
   file-url request to the plain file scenario.
-
-### Not implemented
-
-`tck-message-response` asks the agent to return a bare `Message` instead of a
-`Task`. The SDK has no path for that yet — `A2A.Server.DefaultHandler.send_message/3`
-always returns `{:ok, %Task{}}` — so it falls through to the default and
-DM-MSG-001 stays red until that lands.
 
 ## Tests
 
