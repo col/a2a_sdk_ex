@@ -31,6 +31,8 @@ defmodule A2A.Server.DefaultHandler do
   alias A2A.Server.Events.Event
 
   alias A2A.Types.{
+    AgentCapabilities,
+    AgentCard,
     CancelTaskRequest,
     DeleteTaskPushNotificationConfigRequest,
     GetTaskPushNotificationConfigRequest,
@@ -70,7 +72,7 @@ defmodule A2A.Server.DefaultHandler do
       task_id = message.task_id || server.id_generator.()
       context_id = context_id_for(existing, message, server)
       seed = seed_task(existing, task_id, context_id, message)
-      ctx = build_context(message, task_id, context_id, req)
+      ctx = build_context(server, message, task_id, context_id, req)
       maybe_register_inline_push(server, task_id, req)
       ensure_dispatcher_for_configured(server, task_id)
 
@@ -169,7 +171,7 @@ defmodule A2A.Server.DefaultHandler do
       task_id = message.task_id || server.id_generator.()
       context_id = context_id_for(existing, message, server)
       seed = seed_task(existing, task_id, context_id, message)
-      ctx = build_context(message, task_id, context_id, req)
+      ctx = build_context(server, message, task_id, context_id, req)
       maybe_register_inline_push(server, task_id, req)
       ensure_dispatcher_for_configured(server, task_id)
       :ok = Events.subscribe(server.pubsub, task_id)
@@ -271,10 +273,54 @@ defmodule A2A.Server.DefaultHandler do
     end
   end
 
+  @doc """
+  The authenticated extended card for the resolved caller. Returns
+  `:extended_agent_card_not_configured` unless the base card advertises
+  `capabilities.extended_agent_card` **and** an `extended_agent_card_resolver` is
+  configured **and** it returns a card for this user. No SDK-level auth rejection —
+  the resolver receives the (possibly anonymous) `server.user` and decides.
+  """
+  @spec get_extended_agent_card(A2A.Server.t()) ::
+          {:ok, AgentCard.t()} | {:error, A2A.Error.t()}
+  def get_extended_agent_card(%A2A.Server{} = server) do
+    with :ok <- ensure_extended_advertised(server),
+         resolver when is_function(resolver, 1) <- server.extended_agent_card_resolver,
+         %AgentCard{} = card <- resolver.(server.user) do
+      {:ok, card}
+    else
+      _ -> {:error, extended_not_configured()}
+    end
+  end
+
+  defp ensure_extended_advertised(%A2A.Server{
+         agent_card: %AgentCard{capabilities: %AgentCapabilities{extended_agent_card: true}}
+       }),
+       do: :ok
+
+  defp ensure_extended_advertised(_server), do: :error
+
+  defp extended_not_configured,
+    do: %A2A.Error{
+      code: :extended_agent_card_not_configured,
+      message: "this agent does not serve an authenticated extended card"
+    }
+
   @impl true
   @spec cancel_task(A2A.Server.t(), CancelTaskRequest.t()) ::
           {:ok, Task.t()} | {:error, A2A.Error.t()}
   def cancel_task(%A2A.Server{} = server, %CancelTaskRequest{id: id}) do
+    # Ownership gate: a task the caller's scope cannot see is TaskNotFound, exactly
+    # as for GetTask. This MUST precede the live-execution branch — the execution
+    # Registry is keyed by task_id alone (owner-agnostic), so without this read a
+    # caller could cancel another owner's in-flight task by id (the store key is the
+    # only thing that carries the owner).
+    case server.store.get(id, server.scope) do
+      {:ok, %Task{}} -> cancel_resolved(server, id)
+      {:error, :not_found} -> {:error, A2A.Error.not_found(id)}
+    end
+  end
+
+  defp cancel_resolved(server, id) do
     case Registry.lookup(server.registry, id) do
       [{pid, _}] ->
         try do
@@ -369,13 +415,13 @@ defmodule A2A.Server.DefaultHandler do
     |> ResultAssembler.apply(message)
   end
 
-  defp build_context(message, task_id, context_id, req) do
+  defp build_context(server, message, task_id, context_id, req) do
     %RequestContext{
       message: message,
       task_id: task_id,
       context_id: context_id,
       task: nil,
-      user: A2A.User.anonymous(),
+      user: server.user,
       config: req.configuration || %{}
     }
   end

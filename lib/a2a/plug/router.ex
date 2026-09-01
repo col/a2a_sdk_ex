@@ -15,11 +15,12 @@ defmodule A2A.Plug.Router do
   """
   use Plug.Router, copy_opts_to_assign: :init_opts
 
-  alias A2A.Plug.{Cache, JSONRPC, REST, ServiceParams, SSE}
+  alias A2A.Plug.{Cache, Identity, JSONRPC, REST, ServiceParams, SSE}
   alias A2A.Server.AgentCardURL
 
   plug(:match)
   plug(:validate_service_params)
+  plug(Identity, [])
   plug(:dispatch)
 
   # Service parameters are validated once, before dispatch, so both bindings
@@ -45,6 +46,15 @@ defmodule A2A.Plug.Router do
   defp render_service_error(conn, error) do
     {status, body} = A2A.Error.to_rest(error)
     send_a2a(conn, status, body)
+  end
+
+  # The per-request server handle: the static handle with the resolved caller and
+  # an owner-scoped `A2A.Scope` folded in (A2A.Server.for_request/2). Every store
+  # call downstream is thereby isolated to the owner, at no per-call-site cost.
+  defp request_server(conn) do
+    conn.assigns.init_opts[:server]
+    |> A2A.Server.handle()
+    |> A2A.Server.for_request(Identity.current_user(conn))
   end
 
   get "/.well-known/agent-card.json" do
@@ -85,7 +95,7 @@ defmodule A2A.Plug.Router do
   end
 
   post "/" do
-    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    server = request_server(conn)
 
     case read_body(conn) do
       {:ok, body, conn} ->
@@ -115,13 +125,13 @@ defmodule A2A.Plug.Router do
   # colon, so `/message:send` and `/message:stream` would otherwise both compile to
   # the same "message" + capture-rest pattern and collide.
   post "/message\\:send" do
-    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    server = request_server(conn)
     {:ok, body, conn} = read_body(conn)
     render_rest(conn, REST.send_message(server, decode_body(body)))
   end
 
   post "/message\\:stream" do
-    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    server = request_server(conn)
     {:ok, body, conn} = read_body(conn)
 
     case REST.stream_message(server, decode_body(body)) do
@@ -131,34 +141,39 @@ defmodule A2A.Plug.Router do
   end
 
   get "/tasks" do
-    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    server = request_server(conn)
     conn = fetch_query_params(conn)
     render_rest(conn, REST.list_tasks(server, conn.query_params))
   end
 
+  get "/extendedAgentCard" do
+    server = request_server(conn)
+    render_rest(conn, REST.get_extended_agent_card(server))
+  end
+
   post "/tasks/:task_id/pushNotificationConfigs" do
-    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    server = request_server(conn)
     {:ok, body, conn} = read_body(conn)
     render_rest(conn, REST.set_push_config(server, task_id, decode_body(body)))
   end
 
   get "/tasks/:task_id/pushNotificationConfigs" do
-    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    server = request_server(conn)
     render_rest(conn, REST.list_push_configs(server, task_id))
   end
 
   get "/tasks/:task_id/pushNotificationConfigs/:id" do
-    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    server = request_server(conn)
     render_rest(conn, REST.get_push_config(server, task_id, id))
   end
 
   delete "/tasks/:task_id/pushNotificationConfigs/:id" do
-    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    server = request_server(conn)
     render_rest(conn, REST.delete_push_config(server, task_id, id))
   end
 
   get "/tasks/:id" do
-    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    server = request_server(conn)
 
     if String.ends_with?(id, ":subscribe") do
       subscribe(conn, server, String.replace_suffix(id, ":subscribe", ""))
@@ -169,7 +184,7 @@ defmodule A2A.Plug.Router do
   end
 
   post "/tasks/:id" do
-    server = A2A.Server.handle(conn.assigns.init_opts[:server])
+    server = request_server(conn)
 
     cond do
       String.ends_with?(id, ":cancel") ->

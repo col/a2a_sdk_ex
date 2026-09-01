@@ -8,8 +8,10 @@ defmodule A2A.Plug.JSONRPC do
   alias A2A.Server.DefaultHandler
 
   alias A2A.Types.{
+    AgentCard,
     CancelTaskRequest,
     DeleteTaskPushNotificationConfigRequest,
+    GetExtendedAgentCardRequest,
     GetTaskPushNotificationConfigRequest,
     GetTaskRequest,
     ListTaskPushNotificationConfigsRequest,
@@ -40,7 +42,8 @@ defmodule A2A.Plug.JSONRPC do
     "CreateTaskPushNotificationConfig" => {TaskPushNotificationConfig, :unary},
     "GetTaskPushNotificationConfig" => {GetTaskPushNotificationConfigRequest, :unary},
     "ListTaskPushNotificationConfigs" => {ListTaskPushNotificationConfigsRequest, :unary},
-    "DeleteTaskPushNotificationConfig" => {DeleteTaskPushNotificationConfigRequest, :unary}
+    "DeleteTaskPushNotificationConfig" => {DeleteTaskPushNotificationConfigRequest, :unary},
+    "GetExtendedAgentCard" => {GetExtendedAgentCardRequest, :unary}
   }
 
   @spec decode_envelope(binary()) :: {:ok, envelope()} | {:error, map()}
@@ -135,6 +138,13 @@ defmodule A2A.Plug.JSONRPC do
   defp call(server, id, :unary, %DeleteTaskPushNotificationConfigRequest{} = req) do
     case DefaultHandler.delete_push_config(server, req) do
       {:ok, :deleted} -> {:reply, %{"jsonrpc" => "2.0", "id" => id, "result" => nil}}
+      {:error, err} -> {:error, error_from(id, err)}
+    end
+  end
+
+  defp call(server, id, :unary, %GetExtendedAgentCardRequest{}) do
+    case DefaultHandler.get_extended_agent_card(server) do
+      {:ok, %AgentCard{} = card} -> {:reply, result_envelope(id, card)}
       {:error, err} -> {:error, error_from(id, err)}
     end
   end

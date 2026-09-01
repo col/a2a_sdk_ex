@@ -14,7 +14,16 @@ defmodule A2A.Server.Supervisor do
   Other options: `:store` (custom `A2A.Server.TaskStore`, default ETS-backed),
   `:agent_card` (served at `/.well-known/agent-card.json`), `:scope` (default
   tenant/owner scope), and `:push_notifications` (set `true` to enable push
-  config storage/dispatch). Timeouts:
+  config storage/dispatch).
+
+  Identity & auth options: `:user_resolver` (`(Plug.Conn.t() -> A2A.User.t())`,
+  default an anonymous user) resolves the caller from the request; `:owner_resolver`
+  (`(A2A.User.t() -> String.t() | nil)`, default `nil`) derives the storage owner so
+  the `TaskStore`/`PushConfigStore` isolate per caller (a cross-owner id reads as
+  `TaskNotFound`); `:extended_agent_card_resolver` (`(A2A.User.t() -> A2A.Types.AgentCard.t() | nil)`)
+  supplies the authenticated extended card.
+
+  Timeouts:
 
     * `:drain_timeout` (default `:infinity`) — how long a *blocking* `SendMessage`
       waits on a silent task before giving up. Overridable per request.
@@ -53,6 +62,10 @@ defmodule A2A.Server.Supervisor do
       dyn_sup: Module.concat(name, "ExecutionSupervisor"),
       store: store,
       scope: Keyword.get(opts, :scope, A2A.Scope.default()),
+      user_resolver: Keyword.get(opts, :user_resolver, fn _conn -> A2A.User.anonymous() end),
+      owner_resolver: Keyword.get(opts, :owner_resolver, fn _user -> nil end),
+      extended_agent_card_resolver: Keyword.get(opts, :extended_agent_card_resolver),
+      user: A2A.User.anonymous(),
       id_generator: Keyword.get(opts, :id_generator, &A2A.Server.default_id/0),
       drain_timeout: Keyword.get(opts, :drain_timeout, :infinity),
       stream_idle_timeout: Keyword.get(opts, :stream_idle_timeout, 300_000),

@@ -44,7 +44,9 @@ ADRs: [0001](decisions/0001-server-first-scope.md),
   long-running-task delivery for clients that can't hold a stream open; both
   reference SDKs treat it as core.
 - **Extensions negotiation** — `A2A-Extensions` header → activated extensions.
-- **Server-side auth/user model** — `A2A.User` + `user_resolver` hook.
+- **Server-side auth/user model** — delivered: `A2A.User` + `user_resolver`
+  identity resolution, `owner_resolver`-scoped storage isolation, and the
+  authenticated `GetExtendedAgentCard`. ([ADR-0018](decisions/0018-identity-ownership-and-extended-card.md))
 
 ### Deferred — designed around, added later
 
@@ -57,6 +59,9 @@ ADRs: [0001](decisions/0001-server-first-scope.md),
 - **Agent card signing** (JWS + JCS) — real crypto + canonicalization; only
   needed by clients verifying card authenticity.
   ([ADR-0008](decisions/0008-v1-feature-tiers.md))
+- **Push notification JWT/JWKS signing** — same class as agent-card signing
+  (asymmetric crypto); outbound push auth today is credential-passing only.
+  ([ADR-0018](decisions/0018-identity-ownership-and-extended-card.md))
 - **First-party Ecto adapter** — a fast-follow package once the `TaskStore`
   behaviour is proven. ([ADR-0007](decisions/0007-ets-task-store.md))
 - **The client side** — a separate effort after the server story lands.

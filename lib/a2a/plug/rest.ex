@@ -8,6 +8,7 @@ defmodule A2A.Plug.REST do
   alias A2A.Server.DefaultHandler
 
   alias A2A.Types.{
+    AgentCard,
     CancelTaskRequest,
     DeleteTaskPushNotificationConfigRequest,
     GetTaskPushNotificationConfigRequest,
@@ -63,6 +64,13 @@ defmodule A2A.Plug.REST do
 
     case DefaultHandler.get_task(server, req) do
       {:ok, %Task{} = t} -> {:reply, 200, A2A.JSON.to_json_map(t)}
+      {:error, %A2A.Error{} = e} -> render_error(e)
+    end
+  end
+
+  def get_extended_agent_card(server) do
+    case DefaultHandler.get_extended_agent_card(server) do
+      {:ok, %AgentCard{} = card} -> {:reply, 200, A2A.JSON.to_json_map(card)}
       {:error, %A2A.Error{} = e} -> render_error(e)
     end
   end

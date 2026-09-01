@@ -29,6 +29,12 @@ defmodule A2A.Server.PushSender.DefaultTest do
     refute Enum.any?(headers, fn {k, _} -> k == "Authorization" end)
   end
 
+  test "build_request emits no auth headers when neither authentication nor token is set" do
+    cfg = %TaskPushNotificationConfig{url: "https://h/cb"}
+    {_url, headers, _ct, _body} = Default.build_request({cfg, frame()})
+    assert headers == []
+  end
+
   test "default_url_validator accepts http(s) and rejects others" do
     v = PushSender.default_url_validator()
     assert :ok = v.("https://ok/cb")
