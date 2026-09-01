@@ -85,7 +85,7 @@ The client is the dual: one `A2A.Client` facade **in front of** N transports.
 | Module | Purpose |
 | --- | --- |
 | `A2A.Client` | Facade: `connect/2` + operations; `%A2A.Client{}` struct |
-| `A2A.Client.Config` | `%Config{}`: `preferred_transports`, `streaming?`, default `headers`/`opts`, `http_client` (module), `http_opts` |
+| `A2A.Client.Config` | `%Config{}`: `preferred_transports`, `streaming?`, default `headers`/`opts`, `http_client` (module), `http_opts`, `stream_timeout` (default `120_000`) |
 | `A2A.Client.CardResolver` | Fetch + decode `AgentCard` from `/.well-known/agent-card.json` |
 | `A2A.Client.Transport` | Behaviour — the wire operations |
 | `A2A.Client.Transport.JSONRPC` | JSON-RPC 2.0 envelope build/parse, method dispatch, SSE frame decode |
@@ -188,7 +188,14 @@ Contract, mirroring the server's SSE decisions:
   in brainstorming; the alternative — an `{:error, _}` element — was rejected.)
 - **Termination** follows the server: the stream ends on a task-terminal event or
   a single direct `Message`. The client does not impose its own idle timeout
-  beyond the HTTP adapter's `receive_timeout`.
+  beyond the HTTP adapter's receive timeout.
+- **Generous default streaming timeout.** Agent turns routinely wait on LLM
+  latency, so the SSE receive timeout defaults to **`120_000` ms**
+  (`Config.stream_timeout`), well above a typical unary HTTP default — the same
+  reasoning behind `a2a_elixir_sdk`'s 120s streaming default. Unary calls keep a
+  shorter default (`opts[:timeout]`, HTTP-adapter default); `stream_timeout`
+  bounds the *gap between events*, and a caller on constrained infrastructure can
+  lower it. The Req adapter maps it to `receive_timeout` on the streaming request.
 
 ## Behaviour: transport selection
 
@@ -298,9 +305,14 @@ No new hard dependencies. `plug`/`bandit`/`phoenix_pubsub` remain server-only.
   have a live SUT. Exercises: connect+discover, send (blocking), stream (multi
   event to terminal), get/cancel/list, push CRUD, extended card (authorised and
   `not_configured`), and transport selection against a dual-interface card.
-- A small dedicated fixture agent (likely a new `examples/client_server`, or a
-  reuse of `echo_server` extended with an extended-card resolver) provides a
-  predictable SUT; the reuse-vs-new call is made in the implementation plan.
+- A new **`examples/client_server`** provides the predictable SUT: its own
+  `mix.exs` (path-dep on this repo), booted via `A2A.Standalone`, advertising a
+  dual-interface card (JSON-RPC + REST) and streaming, and configured with a
+  `user_resolver` + `extended_agent_card_resolver` so auth and the extended card
+  are exercisable. It stays separate from `echo_server` (which is the minimal
+  "how do I write an agent" reference and must stay small) and, like the other
+  examples, is **not** part of this repo's `mix test`/`mix precommit`. The
+  client's integration suite starts it (or mounts its handler) as the oracle.
 
 TDD throughout; everyday `mix test` stays green with no extra toolchain (client
 tests need no `protoc`; integration tests need `req` + `bandit`, already
@@ -326,7 +338,7 @@ Deferred, designed around, recorded in the accompanying ADR:
 
 1. `A2A.Client.*` modules per the layout above.
 2. `A2A.Client.HTTP` behaviour + `A2A.Client.HTTP.Req` adapter.
-3. Unit + integration test suites; fixture SUT (new/reused example agent).
+3. Unit + integration test suites; a new `examples/client_server` fixture SUT.
 4. **ADR-0019** — "Client design: facade + transport behaviour, injectable HTTP,
    header-passthrough auth; middleware/gRPC/polling deferred."
 5. Doc updates: `docs/architecture/transports.md` (client selection section),
@@ -336,5 +348,6 @@ Deferred, designed around, recorded in the accompanying ADR:
 
 ## Open questions
 
-None blocking. The reuse-vs-new example-server decision and the exact
-`A2A.Client.HTTP` callback signatures are settled during the implementation plan.
+None blocking. The exact `A2A.Client.HTTP` callback signatures are settled during
+the implementation plan. (The example-server question is resolved: a new
+`examples/client_server`.)
