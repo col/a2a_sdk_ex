@@ -2,6 +2,8 @@
 
 Date: 2026-08-30
 Status: Accepted
+Superseded in part by [ADR-0013](0013-spec-faithful-error-representation.md)
+(REST error body and content type).
 
 ## Context
 

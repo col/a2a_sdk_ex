@@ -17,6 +17,12 @@ defmodule ComplianceServer.Application do
          executor: ComplianceServer.Executor,
          pubsub: ComplianceServer.PubSub,
          push_notifications: true,
+         # A stream now closes only at a task-terminal state (ADR-0017), so a
+         # scenario that parks at `input_required` and is never answered holds the
+         # SSE connection until this fires. The SDK default is 5 minutes; a TCK run
+         # should fail fast rather than hang, and nothing here is legitimately
+         # silent for 30s.
+         stream_idle_timeout: 30_000,
          agent_card: ComplianceServer.AgentCard.card(base_url)}
       ] ++ http_children(port)
 

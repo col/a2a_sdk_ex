@@ -9,6 +9,7 @@ defmodule A2A.Plug.JSONRPC do
     GetTaskRequest,
     ListTaskPushNotificationConfigsRequest,
     ListTasksRequest,
+    Message,
     SendMessageRequest,
     SendMessageResponse,
     SubscribeToTaskRequest,
@@ -74,9 +75,12 @@ defmodule A2A.Plug.JSONRPC do
     do: {:error, error_envelope(id, -32_602, "invalid params: expected an object")}
 
   # --- unary ---
+  # `SendMessageResponse` is a oneof: the agent either created a task or answered
+  # directly with a message (spec 3.1.1).
   defp call(server, id, :unary, %SendMessageRequest{} = req) do
     case DefaultHandler.send_message(server, req) do
       {:ok, %Task{} = t} -> {:reply, result_envelope(id, SendMessageResponse.task(t))}
+      {:ok, %Message{} = m} -> {:reply, result_envelope(id, SendMessageResponse.message(m))}
       {:error, err} -> {:error, error_from(id, err)}
     end
   end

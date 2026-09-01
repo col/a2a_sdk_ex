@@ -6,8 +6,6 @@ defmodule A2A.Server.PushDispatcher do
   alias A2A.Server.{Events, StreamFrame}
   alias A2A.Server.Events.Event
 
-  @idle_timeout 60_000
-
   @spec start_link(%{server: A2A.Server.t(), task_id: String.t()}) :: GenServer.on_start()
   def start_link(%{server: server, task_id: task_id} = arg) do
     GenServer.start_link(__MODULE__, arg, name: via(server, task_id))
@@ -18,17 +16,36 @@ defmodule A2A.Server.PushDispatcher do
   @impl true
   def init(%{server: server, task_id: task_id}) do
     :ok = Events.subscribe(server.pubsub, task_id)
-    {:ok, %{server: server, task_id: task_id}, @idle_timeout}
+    {:ok, %{server: server, task_id: task_id}, server.push_idle_timeout}
   end
 
   @impl true
-  def handle_info(%Event{payload: payload, terminal?: terminal?}, state) do
+  def handle_info(%Event{payload: payload}, state) do
     deliver(state.server, state.task_id, StreamFrame.of(payload))
-    if terminal?, do: {:stop, :normal, state}, else: {:noreply, state, @idle_timeout}
+
+    if Events.final?(payload),
+      do: {:stop, :normal, state},
+      else: {:noreply, state, state.server.push_idle_timeout}
   end
 
-  def handle_info(:timeout, state), do: {:stop, :normal, state}
-  def handle_info(_other, state), do: {:noreply, state, @idle_timeout}
+  # The idle timeout is a garbage collector for tasks nobody is working on — not a
+  # delivery deadline. An agent doing one long silent piece of work (a slow model
+  # call, a big retrieval) emits nothing between `working` and its terminal event,
+  # so reaping on silence alone would drop exactly the event the webhook exists
+  # for. Checking at reap time rather than monitoring at subscribe time also avoids
+  # a race: `ensure_dispatcher/2` runs BEFORE `start_execution/5`, so there is no
+  # execution pid to monitor when this process starts. Worst case the dispatcher
+  # outlives its execution by one idle window, which costs nothing.
+  def handle_info(:timeout, state) do
+    case execution_live?(state.server, state.task_id) do
+      true -> {:noreply, state, state.server.push_idle_timeout}
+      false -> {:stop, :normal, state}
+    end
+  end
+
+  def handle_info(_other, state), do: {:noreply, state, state.server.push_idle_timeout}
+
+  defp execution_live?(server, task_id), do: Registry.lookup(server.registry, task_id) != []
 
   defp deliver(server, task_id, frame) do
     {:ok, configs} = server.push_store.list(task_id, server.scope)

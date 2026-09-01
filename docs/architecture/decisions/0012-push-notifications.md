@@ -55,8 +55,12 @@ dispatch) while keeping per-config delivery concurrent and isolated —
 `A2A.Test.DelayingSender` and `A2A.Test.PartialRaisingSender` in the test
 suite exist specifically to prove a slow or raising config doesn't reorder or
 starve a sibling config's delivery. The dispatcher exits normally on the
-task's terminal event, or after a 60s idle timeout (belt-and-suspenders — the
-terminal event is the expected exit path).
+task's terminal event, or after `push_idle_timeout` (default 60s) of silence
+with **no execution running** for the task — the timeout collects dispatchers
+for tasks nobody is working on, never one whose agent is simply thinking. A
+reaped dispatcher is revived by `DefaultHandler` before a later turn (or a
+cancel) broadcasts anything, so a long-parked task does not silently stop
+delivering while its config remains registered.
 
 **Best-effort, unconditionally.** `dispatch_one/4` wraps `PushSender.send/3`
 in `rescue`/`catch` as well as handling its `{:error, reason}` return; any

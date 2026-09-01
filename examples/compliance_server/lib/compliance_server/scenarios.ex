@@ -23,6 +23,7 @@ defmodule ComplianceServer.Scenarios do
           | :artifact_data
           | :input_required
           | :reject_task
+          | :message_response
           | :stream_001
           | :stream_002
           | :stream_003
@@ -33,11 +34,9 @@ defmodule ComplianceServer.Scenarios do
           | :resubscribe_long_running
           | :default
 
-  # `tck-message-response` is deliberately absent: returning a bare Message
-  # instead of a Task needs an SDK path that does not exist yet, so it falls
-  # through to :default and DM-MSG-001 stays red until that lands.
   @prefixes %{
     "tck-complete-task" => :complete_task,
+    "tck-message-response" => :message_response,
     "tck-artifact-text" => :artifact_text,
     "tck-artifact-file" => :artifact_file,
     "tck-artifact-file-url" => :artifact_file_url,

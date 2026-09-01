@@ -36,7 +36,7 @@ defmodule A2A.Server.PushE2ETest do
     cfg = %TaskPushNotificationConfig{url: base <> "/cb", token: "t"}
 
     req = %SendMessageRequest{
-      message: %Message{message_id: "m1", role: :user, task_id: "e2e-1", parts: [Part.text("hi")]},
+      message: %Message{message_id: "m1", role: :user, parts: [Part.text("hi")]},
       configuration: %SendMessageConfiguration{task_push_notification_config: cfg}
     }
 

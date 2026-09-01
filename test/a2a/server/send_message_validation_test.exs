@@ -56,7 +56,11 @@ defmodule A2A.Server.SendMessageValidationTest do
 
     assert conn.status == 400
 
-    assert %{"code" => 3, "details" => [%{"reason" => "INVALID_ARGUMENT"}]} =
-             Jason.decode!(conn.resp_body)
+    # InvalidParams is a standard JSON-RPC error, not an A2A-specific one, so the
+    # spec gives it no ErrorInfo reason and the details array is omitted (5.4).
+    assert %{"error" => error} = Jason.decode!(conn.resp_body)
+    assert error["code"] == 400
+    assert error["status"] == "INVALID_ARGUMENT"
+    refute Map.has_key?(error, "details")
   end
 end

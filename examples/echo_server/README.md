@@ -53,7 +53,7 @@ Each `data:` line is a JSON-RPC response envelope carrying one stream event.
 
 The same operations are served over the REST transport at the same base URL,
 following the vendored proto's `google.api.http` paths. Requests carry the bare
-proto-JSON body (no JSON-RPC envelope); responses use `application/a2a+json`.
+proto-JSON body (no JSON-RPC envelope); responses use `application/json`.
 
 Send a message (blocking):
 

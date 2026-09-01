@@ -29,20 +29,37 @@ walking skeleton (mountable supervision tree, process-per-task execution, PubSub
 event path, ETS `TaskStore`, and a blocking `DefaultHandler.send_message/get_task`).
 Phase 2 adds streaming — `DefaultHandler.send_message_stream/2` and `resubscribe/2`,
 both served by the shared `A2A.Server.EventStream` (subscribe-and-yield with
-three-signal termination, see ADR-0009), plus a configurable, SDK-side
-`:drain_timeout` for the blocking path.
+three-signal termination, see ADR-0009). Streams close at task-terminal only
+(ADR-0017): `send_message_stream/2` and `resubscribe/2` stay open through
+`input_required`/`auth_required`, bounded by `stream_idle_timeout` rather than
+`:DOWN`; the *blocking* path is the one that stops at an interrupted state, via
+a configurable, SDK-side `:drain_timeout`. That blocking fold does **not** run in
+the caller: `send_message/2` delegates to `A2A.Server.BlockingDrain`, a
+short-lived monitored child process that subscribes, folds and exits. Because
+§3.2.2 ends the wait at an interrupted state while the executor may still be
+emitting, the subscription has to die with the drain rather than leave events in
+the caller's mailbox. A `{:ready, pid}` handshake keeps the old guarantee that the
+subscription precedes `start_execution/5`.
 
 The **HTTP transport** has landed for both bindings (ADR-0010, ADR-0011):
 `A2A.Plug.Router` (mountable `Plug.Router`) + `A2A.Plug.JSONRPC` (envelope
 decode/dispatch) + `A2A.Plug.REST` (REST transport mechanics — path/query/body
-→ typed request via `A2A.JSON`, `application/a2a+json` responses) +
+→ typed request via `A2A.JSON`, `application/json` responses) +
 `A2A.Plug.SSE` (streaming responses, shared by both bindings via a
-frame-formatter argument), plus an optional `A2A.Standalone` (Bandit-backed)
-for running without a host web framework. All six operations are wired on
+frame-formatter argument) + `A2A.Plug.ServiceParams` (ADR-0014: `A2A-Version`
+and request media type, validated as a router plug **before** dispatch so both
+bindings refuse the same requests; lenient about absence, strict about
+disagreement; agent-card discovery exempt), plus an optional `A2A.Standalone`
+(Bandit-backed) for running without a host web framework. All six operations are wired on
 both bindings — `SendMessage`, `SendStreamingMessage`, `GetTask`,
-`CancelTask`, `ListTasks`, `SubscribeToTask` — rendered via
-`A2A.Error.to_jsonrpc/1` (JSON-RPC) or `A2A.Error.to_rest/1` (REST,
-`google.rpc.Status` body), two projections of one error-code table. `plug` is
+`CancelTask`, `ListTasks`, `SubscribeToTask` (REST serves that last one on
+**both `GET` and `POST`**: spec §11.3.2 says `POST`, the vendored proto
+annotates it `get:`, and both ship) — rendered via
+`A2A.Error.to_jsonrpc/1` (JSON-RPC) or `A2A.Error.to_rest/1` (REST, AIP-193
+body), two projections of one error-code table — spec §5.4 verbatim since
+ADR-0013, with A2A-specific errors carrying a `google.rpc.ErrorInfo` in the
+JSON-RPC `data` **array** (§9.5) and the REST `error.details` array (§11.6),
+and standard JSON-RPC errors carrying none. `plug` is
 now a **hard** runtime dep; `bandit` is optional (only needed for
 `A2A.Standalone`). Cancellation needed `A2A.Server.Execution` restructured to
 run the author's `execute/2` in an unlinked, monitored **child process**, so
@@ -101,21 +118,56 @@ track the gap, not gate on it.
   GenServer name) is a candidate before multi-tenant or the transports phase spins
   up concurrent servers. **`A2A.Server.PushConfigStore.ETS` shares this same
   global-naming limitation** — same cause, same fix candidate.
+- **Streams close at terminal state only** (ADR-0017). `send_message_stream/2` and
+  `resubscribe/2` stay open through `input_required`/`auth_required` — a parked
+  task's stream is bounded by `stream_idle_timeout` (default 5 min), not by the
+  turn ending. The *blocking* `send_message/2` still returns at those interrupted
+  states (§3.2.2). A plug-level test that subscribes to a parked task must pass a
+  short `stream_idle_timeout` to `A2A.Server.Supervisor`, because `Router.call/2`
+  is synchronous and would otherwise block for the full default.
 - **Push delivery only sees events emitted after a dispatcher subscribes.** A
   `PushDispatcher` starts lazily on first config registration for a task; it is
   best-effort and forward-only, not a replay log — a config registered mid-task
   does not retroactively receive earlier events. A receiver that needs the full
   history reconciles via `GetTask`.
+- **A dispatcher is reaped only when nobody is working on the task.**
+  `push_idle_timeout` (default 60s) collects dispatchers for abandoned tasks, but
+  `handle_info(:timeout, …)` re-checks the execution `Registry` first, so an agent
+  that works silently for longer than the timeout keeps its dispatcher — otherwise
+  a slow single-turn task would lose the very terminal event the webhook exists
+  for. `DefaultHandler` revives a reaped dispatcher before a later turn or a
+  `cancel_task/2` broadcasts, so delivery cannot stop silently while the config is
+  still registered.
 - **Streaming enumerables must be enumerated once, in the calling process.**
   `send_message_stream/2` and `resubscribe/2` subscribe eagerly (in the caller)
   then return a lazy stream whose `receive` runs at enumeration time — enumerate
   it elsewhere and PubSub events land in the wrong mailbox; never enumerate it and
   the subscription leaks until the process dies. (Documented on both functions.)
+- **Task ids are server-generated** (spec §3.4.2, ADR-0014). A `Message` naming a
+  `taskId` that does not exist is `TaskNotFound`, *not* an implicit create — so a
+  test that needs a predictable id pins `server.id_generator` (`server = %{server
+  | id_generator: fn -> "t1" end}`) rather than setting `message.task_id`.
+- **An executor may answer with a bare `Message`** via `TaskUpdater.reply/2`
+  (ADR-0016), creating and persisting no task. A `%Message{}` **event payload**
+  means exactly that, so nothing else may broadcast one — history seeding applies
+  its message to the projection directly, never through the event stream.
+- **A follow-up turn is seeded from the stored task** (ADR-0015): `resolve_task/2`
+  returns the existing task, the incoming message is appended to it, and that
+  projection seeds **both** the execution's `TaskUpdater` and the blocking drain's
+  assembler — they are separate projections, so seeding only one returns a caller
+  a task missing earlier turns. History records the whole exchange (user messages
+  included); `historyLength` truncates the *response* only, on `GetTask`,
+  `SendMessage` and `ListTasks`, and on REST arrives as a `?historyLength=` query
+  parameter (§11.5).
 - **Deferred (known-minor):** blocking `resolve_blocking` returns error code
   `:timeout` for *any* terminal-less end, including an executor that exits
   (`:DOWN`) without emitting a terminal. Distinguishing idle-timeout from `:DOWN`
   needs `EventStream` to surface a halt reason (a small contract change) — the
   result is correct, only the code/message is imprecise on a pathological path.
+  The same imprecision now extends to the streaming paths: `:monitor` is passed
+  only by the blocking drain (ADR-0017), so a stream attached to an execution
+  that dies without emitting a terminal event has no `:DOWN` to halt on and
+  instead waits out `stream_idle_timeout` before closing.
 
 ## Common commands
 
