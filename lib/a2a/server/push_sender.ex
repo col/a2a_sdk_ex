@@ -1,5 +1,10 @@
 defmodule A2A.Server.PushSender do
-  @moduledoc false
+  @moduledoc """
+  Outbound-HTTP boundary for push delivery. The default (`.Default`) uses `Req`
+  when the module is loaded, else OTP's `:httpc`. Swap in a custom sender via the
+  server's `:push_sender` option (e.g. to use `Finch`/`Tesla` or to capture calls
+  in tests).
+  """
   alias A2A.Types.{StreamResponse, TaskPushNotificationConfig}
 
   @callback send(TaskPushNotificationConfig.t(), StreamResponse.t(), keyword()) ::

@@ -1,5 +1,10 @@
 defmodule A2A.Plug.REST do
-  @moduledoc false
+  @moduledoc """
+  HTTP+JSON/REST binding mechanics: build a typed request from path/query/body,
+  call `A2A.Server.DefaultHandler`, and tag the result for the router to render
+  (or an error via `A2A.Error.to_rest/1`). Transport mechanics only —
+  no `Plug.Conn`, no sockets.
+  """
   alias A2A.Server.DefaultHandler
 
   alias A2A.Types.{

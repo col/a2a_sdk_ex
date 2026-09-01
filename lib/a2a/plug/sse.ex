@@ -1,5 +1,8 @@
 defmodule A2A.Plug.SSE do
-  @moduledoc false
+  @moduledoc """
+  Streams a lazy enumerable of `%A2A.Types.StreamResponse{}` frames as
+  Server-Sent Events.
+  """
   import Plug.Conn
   alias A2A.Plug.JSONRPC
 
