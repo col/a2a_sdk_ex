@@ -1,8 +1,20 @@
 defmodule A2A.Server.Supervisor do
   @moduledoc """
   The mountable OTP tree for one A2A server: PubSub (optional — reuse the host's),
-  Registry, execution DynamicSupervisor, and the ETS TaskStore. Nothing is global;
-  a host app can start several under different `:name`s.
+  Registry, execution DynamicSupervisor, and the ETS TaskStore. Add it to your
+  application's supervision tree, giving it a unique `:name` and your
+  `A2A.Server.AgentExecutor` implementation:
+
+      children = [
+        {Phoenix.PubSub, name: MyApp.PubSub},
+        {A2A.Server.Supervisor,
+         name: MyAgent, executor: MyExecutor, pubsub: MyApp.PubSub}
+      ]
+
+  Other options: `:store` (custom `A2A.Server.TaskStore`, default ETS-backed),
+  `:agent_card` (served at `/.well-known/agent-card.json`), `:scope` (default
+  tenant/owner scope), `:drain_timeout` (blocking-call timeout), and
+  `:push_notifications` (set `true` to enable push config storage/dispatch).
   """
   use Supervisor
 

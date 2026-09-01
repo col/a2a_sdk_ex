@@ -1,10 +1,5 @@
 defmodule A2A.Plug.JSONRPC do
-  @moduledoc """
-  JSON-RPC 2.0 envelope handling and method dispatch for the A2A transport.
-  Transport-mechanics only: it decodes the envelope, decodes `params` into the
-  typed request via `A2A.JSON`, calls `A2A.Server.DefaultHandler`, and tags the
-  result for the router to render. No `Plug.Conn`, no sockets.
-  """
+  @moduledoc false
   alias A2A.Server.DefaultHandler
 
   alias A2A.Types.{

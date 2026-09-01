@@ -1,9 +1,5 @@
 defmodule A2A.Server.Events do
-  @moduledoc """
-  PubSub topic convention and the internal event envelope. Every executor-emitted
-  event is broadcast as an `Event` on the task topic; SSE, resubscribe, and push
-  delivery (later phases) are all just additional subscribers.
-  """
+  @moduledoc false
   alias A2A.Types.{Message, Task, TaskArtifactUpdateEvent, TaskStatusUpdateEvent}
 
   defmodule Event do

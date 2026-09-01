@@ -1,18 +1,5 @@
 defmodule A2A.Server.EventStream do
-  @moduledoc """
-  Shared subscription-backed event stream for a single task, used by both the
-  blocking and streaming delivery paths. A `Stream.resource/3` that subscribes to
-  the task topic on start, yields each `%A2A.Server.Events.Event{}` envelope in
-  publish order, and terminates on the union of three signals (see ADR-0009):
-
-    1. a terminal event (`terminal?: true` — terminal state or `input_required`);
-    2. the monitored execution process going `:DOWN` (deterministic crash/exit);
-    3. an idle timeout (`:infinity` disables it; defense-in-depth for a silent hang).
-
-  It always unsubscribes on halt and demonitors if it monitored. Yields the
-  **domain** envelope — no wire types here; the `StreamResponse` projection lives
-  in the streaming consumer.
-  """
+  @moduledoc false
   alias A2A.Server.Events
   alias A2A.Server.Events.Event
 

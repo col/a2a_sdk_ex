@@ -1,13 +1,5 @@
 defmodule A2A.Server.PushDispatcher do
-  @moduledoc """
-  One dispatcher per task that has ≥1 push config. Subscribes to the task's PubSub
-  topic and, for each event, re-reads the task's configs from the `PushConfigStore`
-  and delivers the event (as a `StreamResponse`) to every webhook concurrently,
-  awaiting all before the next event → per-task ordering. A slow/hung consumer
-  blocks only this task (bounded by `push_timeout`); other tasks are unaffected.
-  Best-effort: delivery failures are logged, never raised. Shuts down after the
-  task's terminal event or an idle timeout.
-  """
+  @moduledoc false
   use GenServer, restart: :temporary
   require Logger
 

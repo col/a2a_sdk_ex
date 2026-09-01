@@ -1,12 +1,16 @@
 defmodule A2A.Server.DefaultHandler do
   @moduledoc """
-  Batteries-included `RequestHandler`. Implements the blocking `send_message/2` and
-  `get_task/2` path, plus the streaming `send_message_stream/2` and `resubscribe/2`
-  path. The blocking path subscribes to the task topic *before* starting the execution
-  process, then folds the shared `A2A.Server.EventStream` through `ResultAssembler` to
-  the terminal (or `input_required`) frame. The streaming path subscribes eagerly and
-  returns a lazy `EventStream`-backed enumerable — see the enumeration contract noted
-  on `send_message_stream/2` and `resubscribe/2`.
+  The batteries-included `A2A.Server.RequestHandler`, wired up automatically by
+  `A2A.Server.Supervisor` — you don't call it directly unless you're driving the
+  server from plain Elixir. It implements the blocking `send_message/2` and
+  `get_task/2` path, the streaming `send_message_stream/2` and `resubscribe/2`
+  path, `cancel_task/2`, `list_tasks/2`, and the push-notification-config
+  callbacks.
+
+  `send_message_stream/2` and `resubscribe/2` return a lazy, PubSub-backed
+  enumerable that must be enumerated in the process that requested it — the
+  subscription is opened eagerly on the calling process before the function
+  returns.
   """
   @behaviour A2A.Server.RequestHandler
 

@@ -1,5 +1,5 @@
 defmodule A2A.Server.PushConfigStore.ETS do
-  @moduledoc "Default ETS-backed `A2A.Server.PushConfigStore`. A GenServer owns a public named `:set` table keyed by `{tenant, owner, task_id, id}`."
+  @moduledoc false
   use GenServer
   @behaviour A2A.Server.PushConfigStore
 

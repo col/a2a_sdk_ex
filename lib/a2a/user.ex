@@ -1,5 +1,5 @@
 defmodule A2A.User do
-  @moduledoc "The authenticated caller surfaced to an executor. Phase 1 ships only the anonymous default."
+  @moduledoc false
   @type t :: %__MODULE__{id: String.t() | nil, authenticated?: boolean(), claims: map()}
   defstruct id: nil, authenticated?: false, claims: %{}
 

@@ -1,7 +1,9 @@
 defmodule A2A.Error do
   @moduledoc """
-  A protocol-level error. Phase 1 returns these tagged as `{:error, %A2A.Error{}}`
-  from handler functions; JSON-RPC/HTTP status mapping arrives with the transports phase.
+  A protocol-level error, returned as `{:error, %A2A.Error{}}` from server
+  handler functions. `to_jsonrpc/1` renders it as a JSON-RPC 2.0 error object;
+  `to_rest/1` renders it as `{http_status, body}` for the REST binding. Also
+  raisable/rescuable as an exception (`code`, `message`, `data`).
   """
   @type t :: %__MODULE__{code: atom(), message: String.t(), data: term()}
   defexception code: :internal_error, message: "error", data: nil

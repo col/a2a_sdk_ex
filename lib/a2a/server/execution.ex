@@ -1,13 +1,5 @@
 defmodule A2A.Server.Execution do
-  @moduledoc """
-  The single process for a `task_id`. Runs the author's `execute/2` in an
-  **unlinked, monitored child process**, keeping this GenServer's mailbox free to
-  handle a `:cancel` call while the author's work is in flight. The GenServer is
-  the task's serial state owner; it stays alive until the child finishes, then
-  stops `:normal`. `restart: :temporary` — a completed/failed execution must
-  never re-run. An author raise/throw/exit surfaces as a non-normal child
-  `:DOWN`, which fails the task once and then stops normally.
-  """
+  @moduledoc false
   use GenServer, restart: :temporary
   require Logger
   alias A2A.Server.{ResultAssembler, TaskUpdater}

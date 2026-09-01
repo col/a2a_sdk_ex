@@ -1,9 +1,5 @@
 defmodule A2A.Server.ResultAssembler do
-  @moduledoc """
-  Folds a stream of domain events into the current `%A2A.Types.Task{}`.
-  Used both by `TaskUpdater` (to maintain its projection) and by the handler
-  (to assemble the value returned to the caller). Terminal tasks are immutable.
-  """
+  @moduledoc false
   alias A2A.Types.{Message, Task, TaskArtifactUpdateEvent, TaskStatus, TaskStatusUpdateEvent}
 
   # Governs task freezing (see `apply/2`) and rejection of new work on a task

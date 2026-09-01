@@ -1,5 +1,5 @@
 defmodule A2A.Server.PushDispatcher.Supervisor do
-  @moduledoc "DynamicSupervisor for per-task `A2A.Server.PushDispatcher` processes, plus idempotent `ensure_started/2` (keyed by task id via the server's push registry)."
+  @moduledoc false
   use DynamicSupervisor
 
   @spec start_link(keyword()) :: Supervisor.on_start()

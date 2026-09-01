@@ -1,16 +1,13 @@
 defmodule A2A.Server.RequestHandler do
   @moduledoc """
-  The transport-agnostic RPC surface. Both the JSON-RPC and REST plugs call one
-  implementation (`A2A.Server.DefaultHandler`), which implements every callback
-  below — `send_message/2` (blocking), `get_task/2`, `send_message_stream/2`,
-  `resubscribe/2`, `cancel_task/2`, `list_tasks/2`, and the four push-notification-
-  config callbacks (`create_push_config/2`, `get_push_config/2`,
-  `list_push_configs/2`, `delete_push_config/2`). The streaming, cancel, list, and
-  push-config callbacks are declared as `@optional_callbacks` for the benefit of
-  alternate `RequestHandler` implementations that don't need them, not because the
-  batteries-included handler skips them — it implements all of them (the push
-  callbacks return `:push_notification_not_supported` when the server was not
-  started with `push_notifications: true`).
+  The transport-agnostic RPC surface behind the JSON-RPC and REST bindings.
+  `A2A.Server.DefaultHandler` — the handler `A2A.Server.Supervisor` wires up —
+  implements every callback: `send_message/2` (blocking), `get_task/2`,
+  `send_message_stream/2`, `resubscribe/2`, `cancel_task/2`, `list_tasks/2`, and
+  the four push-notification-config callbacks (`create_push_config/2`,
+  `get_push_config/2`, `list_push_configs/2`, `delete_push_config/2`). Only
+  `send_message/2` and `get_task/2` are required; the rest are
+  `@optional_callbacks` for a custom `RequestHandler` that doesn't need them.
   """
   alias A2A.Types.{
     CancelTaskRequest,

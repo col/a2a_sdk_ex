@@ -1,24 +1,5 @@
 defmodule A2A.Plug.SSE do
-  @moduledoc """
-  Streams a lazy enumerable of `%A2A.Types.StreamResponse{}` frames as
-  Server-Sent Events. The enumerable was produced (and its PubSub subscription
-  opened) by the handler in THIS request process, so it is enumerated here.
-
-  Peek-first: the first frame is pulled *before* headers are sent, so an early
-  error surfaces as a normal JSON-RPC error envelope rather than a `200` stream
-  that immediately fails. Once the first frame is in hand, headers go out and
-  every frame (including the peeked one) is chunked as `data: <envelope>\\n\\n`.
-  A client disconnect surfaces as a `chunk/2` error, which stops iteration and
-  returns the (abandoned) `conn` without resuming the suspended continuation.
-  The PubSub subscription isn't unsubscribed explicitly at that point; it is
-  released when the Bandit request process terminates, since Phoenix.PubSub
-  auto-unsubscribes a subscriber on its `:DOWN`. The task execution keeps
-  running regardless and is re-attachable via `SubscribeToTask`.
-
-  The enumerable is a **single-use live PubSub subscription** — it is
-  enumerated exactly once, via the `Enumerable.reduce/3` continuation, so a
-  peek never re-enumerates (and thereby loses) events.
-  """
+  @moduledoc false
   import Plug.Conn
   alias A2A.Plug.JSONRPC
 

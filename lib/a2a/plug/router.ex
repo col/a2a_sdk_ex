@@ -5,13 +5,13 @@ defmodule A2A.Plug.Router do
 
       forward "/a2a", to: A2A.Plug.Router, init_opts: [server: MyAgent]
 
-  Routes: `GET /.well-known/agent-card.json` (serves the configured `AgentCard`);
-  `POST /` (JSON-RPC 2.0; streaming methods respond as Server-Sent Events); and
-  the REST routes (`A2A.Plug.REST`) — `POST /message:send`,
+  Routes: `GET /.well-known/agent-card.json` (serves the configured
+  `A2A.Types.AgentCard`); `POST /` (JSON-RPC 2.0; streaming methods respond as
+  Server-Sent Events); and the REST routes — `POST /message:send`,
   `POST /message:stream` (SSE), `GET /tasks`, `GET /tasks/:id`,
-  `GET /tasks/:id:subscribe` (SSE), `POST /tasks/:id:cancel` — following the
-  vendored proto's `google.api.http` paths. All protocol semantics live behind
-  `A2A.Server.RequestHandler`; this router only parses/renders the wire form.
+  `GET /tasks/:id:subscribe` (SSE), `POST /tasks/:id:cancel`. All protocol
+  semantics live behind `A2A.Server.RequestHandler`; this router only
+  parses/renders the wire form.
   """
   use Plug.Router, copy_opts_to_assign: :init_opts
 

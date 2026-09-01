@@ -1,11 +1,5 @@
 defmodule Mix.Tasks.A2a.GenProto do
-  @moduledoc """
-  Generates throwaway Elixir proto modules from `priv/proto/a2a.proto` into
-  `test/support/gen/` for use by the test-only proto-conformance harness.
-
-  Requires `protoc` and the `protoc-gen-elixir` escript on PATH. Never part of
-  `mix compile`; run manually or in CI before `mix test --only proto`.
-  """
+  @moduledoc false
   use Mix.Task
   @shortdoc "Generate proto oracle modules into test/support/gen (dev/CI only)"
 
