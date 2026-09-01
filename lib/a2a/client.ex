@@ -11,4 +11,26 @@ defmodule A2A.Client do
           config: A2A.Client.Config.t()
         }
   defstruct [:agent_card, :transport, :endpoint, :config]
+
+  alias A2A.Client.{CardResolver, Config}
+
+  @spec fetch_agent_card(String.t(), keyword()) ::
+          {:ok, A2A.Types.AgentCard.t()} | {:error, A2A.Error.t()}
+  def fetch_agent_card(url, opts \\ []) when is_binary(url) do
+    {config_opts, resolve_opts} = Keyword.split(opts, config_keys())
+    CardResolver.resolve(url, Config.new(config_opts), resolve_opts)
+  end
+
+  # Keys that belong to Config; everything else passes through to the resolver/opts.
+  defp config_keys,
+    do: [
+      :http_client,
+      :http_opts,
+      :headers,
+      :preferred_transports,
+      :streaming?,
+      :timeout,
+      :stream_timeout,
+      :protocol_version
+    ]
 end
