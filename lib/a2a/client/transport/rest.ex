@@ -92,7 +92,7 @@ defmodule A2A.Client.Transport.REST do
     req = %{
       method: :delete,
       url: url(client, path, %{}),
-      headers: base_headers(client, opts),
+      headers: base_headers(client.config, opts),
       body: nil,
       opts: http_opts(client, opts, :unary)
     }
@@ -115,7 +115,7 @@ defmodule A2A.Client.Transport.REST do
   # --- internals ---
 
   defp stream(client, method, path, body, opts) do
-    headers = [{"accept", "text/event-stream"} | base_headers(client, opts)]
+    headers = [{"accept", "text/event-stream"} | base_headers(client.config, opts)]
 
     req = %{
       method: method,
@@ -149,7 +149,7 @@ defmodule A2A.Client.Transport.REST do
     req = %{
       method: :get,
       url: url(client, path, query),
-      headers: base_headers(client, opts),
+      headers: base_headers(client.config, opts),
       body: nil,
       opts: http_opts(client, opts, :unary)
     }
@@ -161,7 +161,7 @@ defmodule A2A.Client.Transport.REST do
     req = %{
       method: :post,
       url: url(client, path, %{}),
-      headers: base_headers(client, opts),
+      headers: base_headers(client.config, opts),
       body: A2A.JSON.encode!(request),
       opts: http_opts(client, opts, :unary)
     }
@@ -173,7 +173,7 @@ defmodule A2A.Client.Transport.REST do
     req = %{
       method: :post,
       url: url(client, path, %{}),
-      headers: base_headers(client, opts),
+      headers: base_headers(client.config, opts),
       body: "{}",
       opts: http_opts(client, opts, :unary)
     }

@@ -11,7 +11,7 @@ defmodule A2A.Client.CardResolver do
     path = Keyword.get(opts, :agent_card_path, @well_known)
     url = String.trim_trailing(base_url, "/") <> path
 
-    headers = Transport.base_headers(%A2A.Client{config: config}, opts)
+    headers = Transport.base_headers(config, opts)
 
     req = %{
       method: :get,

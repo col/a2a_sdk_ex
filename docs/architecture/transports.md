@@ -230,8 +230,23 @@ The `AgentCard` advertises which transports the server supports via
 `supported_interfaces` (each an `AgentInterface` with `url` +
 `protocol_binding` + `protocol_version`). A single `DefaultHandler` can be
 exposed over both bindings simultaneously; the card lists both so clients pick
-one. (Client-side transport *selection* is out of v1 scope — see
-[Scope and roadmap](scope-and-roadmap.md).)
+one.
+
+### Client-side selection (`A2A.Client`)
+
+`A2A.Client.Transport.Selector` performs that pick on the caller's behalf
+([ADR-0019](decisions/0019-client-design.md)). It builds a priority list from
+`Config.preferred_transports` followed by the card's `supported_interfaces`
+in card order (de-duplicated, case-insensitive on binding name), preferring
+`protocol_version == "1.0"` when a binding appears at multiple versions, then
+walks that list and picks the first binding both advertised by the card and
+implemented client-side (`JSONRPC` | `REST`). The default is **server
+preference** — card order wins — and a caller opts into client preference
+only by setting `preferred_transports`; no overlap between what the card
+advertises and what the client implements is
+`{:error, %A2A.Error{code: :unsupported_operation}}`. `connect/2` runs this
+selection once, against either a freshly fetched card or one the caller
+already holds.
 
 ## Adding gRPC later
 

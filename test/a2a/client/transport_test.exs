@@ -9,7 +9,7 @@ defmodule A2A.Client.TransportTest do
 
   test "base_headers merges defaults, config, and per-call (opts win)" do
     c = client(headers: [{"authorization", "Bearer a"}], protocol_version: "1.0")
-    h = Transport.base_headers(c, headers: [{"authorization", "Bearer b"}])
+    h = Transport.base_headers(c.config, headers: [{"authorization", "Bearer b"}])
     assert {"content-type", "application/json"} in h
     assert {"a2a-version", "1.0"} in h
     assert {"authorization", "Bearer b"} in h

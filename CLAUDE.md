@@ -90,12 +90,34 @@ The **auth phase** (ADR-0018) landed identity resolution (`user_resolver` →
 authenticated `GetExtendedAgentCard` on both bindings; push outbound auth
 remains credential-passing only (JWT/JWKS notification signing deferred).
 
-`examples/` holds two runnable agents. Each has its **own `mix.exs`**
+The **client side** (ADR-0019) is `A2A.Client` — the caller-side counterpart
+to `A2A.Server.*`: a plain-value facade (`%A2A.Client{}`, no process) in
+front of both transports (`A2A.Client.Transport.JSONRPC`,
+`A2A.Client.Transport.REST`), selected from an `AgentCard` by
+`A2A.Client.Transport.Selector` (server-order preferred by default,
+`Config.preferred_transports` opts into client preference, "1.0" preferred
+across duplicate bindings). HTTP itself is behind the injectable
+`A2A.Client.HTTP` behaviour, with `A2A.Client.HTTP.Req` as the first-party
+`Req`-backed adapter. `send_message_stream/3`/`resubscribe/3` return a lazy
+enumerable of decoded `StreamResponse` events; a mid-stream protocol error
+**raises** `%A2A.Error{}` rather than being yielded as a value, so callers get
+a clean `for`-comprehension. Auth is header-passthrough only — per ADR-0018
+the server resolves the caller, so the client's job is just forwarding
+credential headers — which also lights up `get_extended_agent_card/2`. Wire
+errors on both bindings invert through `A2A.Client.Error` into the same
+`%A2A.Error{}` the server emits.
+
+`examples/` holds three runnable agents. Each has its **own `mix.exs`**
 (path-deps on this repo), runs standalone via `mix run --no-halt` from its own
 directory, and is **not** part of this repo's `mix test` or `mix precommit`.
 
 - **`echo_server/`** — the minimal readable example: echoes text back over both
   bindings. Keep it small; it is the "how do I write an agent" reference.
+- **`client_server/`** — the `A2A.Client` integration suite's SUT: a
+  dual-interface (JSON-RPC + REST) streaming agent configured with a
+  `user_resolver` + `extended_agent_card_resolver`, booted via
+  `A2A.Standalone`, so client auth and the extended card have a live target
+  to drive end-to-end.
 - **`compliance_server/`** — the TCK's System Under Test. Implements the TCK's
   in-band SUT contract (behaviour selected by the request's `messageId` prefix,
   transcribed from the TCK's `scenarios/*.feature` into
@@ -174,6 +196,25 @@ track the gap, not gate on it.
   only by the blocking drain (ADR-0017), so a stream attached to an execution
   that dies without emitting a terminal event has no `:DOWN` to halt on and
   instead waits out `stream_idle_timeout` before closing.
+
+### Known constraints / gotchas (client, ADR-0019)
+
+- **Client streaming enumerables must be enumerated once, in the calling
+  process, same as the server side.** `A2A.Client.send_message_stream/3` and
+  `resubscribe/3` open the underlying HTTP connection at enumeration time;
+  enumerating elsewhere or not at all leaks the connection until GC. Halting
+  the enumeration (e.g. breaking out of a `for`) **cancels the in-flight HTTP
+  request** via the adapter's cancel path — it does not just stop reading.
+- **`A2A.Client.HTTP.Req` needs the optional `:req` dependency.** Without it
+  (or without injecting a custom `:http_client` module implementing
+  `A2A.Client.HTTP`), both unary and streaming calls raise a clear
+  configuration error rather than failing to compile — `req` stays optional
+  at the package level.
+- **`Config.stream_timeout` defaults to `120_000` ms** (2 minutes), well above
+  a typical unary HTTP timeout, because agent turns routinely wait on LLM
+  latency. It bounds the gap between SSE events, not the stream's total
+  lifetime; a caller on constrained infrastructure can lower it per-`Config`
+  or per-call.
 
 ## Common commands
 

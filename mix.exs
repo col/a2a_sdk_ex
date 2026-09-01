@@ -97,6 +97,7 @@ defmodule A2A.MixProject do
         Codec: [A2A.JSON],
         Server: [~r/^A2A\.Server(\.|$)/, A2A.Scope, A2A.User],
         Transport: [~r/^A2A\.Plug\./, A2A.Standalone],
+        Client: [~r/^A2A\.Client(\.|$)/],
         Errors: [A2A.Error]
       ]
     ]

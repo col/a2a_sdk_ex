@@ -34,11 +34,8 @@ defmodule A2A.Client.HTTP.Req do
 
   defp timeout(opts, key), do: Keyword.get(opts, key, 30_000)
 
-  # Req returns headers as a map of lists; flatten to a keyword-ish list.
-  defp flatten(headers) when is_map(headers),
-    do: for({k, vs} <- headers, v <- List.wrap(vs), do: {k, v})
-
-  defp flatten(headers) when is_list(headers), do: headers
+  # Req::Response.headers is always a map of lists; flatten to a keyword-ish list.
+  defp flatten(headers), do: for({k, vs} <- headers, v <- List.wrap(vs), do: {k, v})
 
   defp ensure_req! do
     Code.ensure_loaded?(Req) ||

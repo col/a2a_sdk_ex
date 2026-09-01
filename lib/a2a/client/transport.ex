@@ -41,8 +41,8 @@ defmodule A2A.Client.Transport do
   @callback delete_push_config(client, DeleteTaskPushNotificationConfigRequest.t(), opts) ::
               :ok | {:error, A2A.Error.t()}
 
-  @spec base_headers(client, opts) :: [{String.t(), String.t()}]
-  def base_headers(%A2A.Client{config: cfg}, opts) do
+  @spec base_headers(A2A.Client.Config.t(), opts) :: [{String.t(), String.t()}]
+  def base_headers(%A2A.Client.Config{} = cfg, opts) do
     defaults = [{"content-type", "application/json"}, {"a2a-version", cfg.protocol_version}]
     merge_headers(defaults ++ cfg.headers, Keyword.get(opts, :headers, []))
   end

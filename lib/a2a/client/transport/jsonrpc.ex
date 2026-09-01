@@ -85,7 +85,7 @@ defmodule A2A.Client.Transport.JSONRPC do
         "params" => A2A.JSON.to_json_map(request)
       })
 
-    headers = [{"accept", "text/event-stream"} | base_headers(client, opts)]
+    headers = [{"accept", "text/event-stream"} | base_headers(client.config, opts)]
 
     req = %{
       method: :post,
@@ -146,7 +146,7 @@ defmodule A2A.Client.Transport.JSONRPC do
     req = %{
       method: :post,
       url: client.endpoint,
-      headers: base_headers(client, opts),
+      headers: base_headers(client.config, opts),
       body: body,
       opts: http_opts(client, opts, :unary)
     }
