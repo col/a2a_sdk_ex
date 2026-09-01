@@ -35,6 +35,23 @@ defmodule A2A.Plug.RouterTest do
     assert {:ok, %AgentCard{name: "Echo"}} = A2A.JSON.decode(conn.resp_body, AgentCard)
   end
 
+  test "GET agent card resolves interface urls from the request", %{opts: opts, name: name} do
+    card = %AgentCard{
+      name: "Echo",
+      supported_interfaces: [%A2A.Types.AgentInterface{protocol_binding: "JSONRPC"}]
+    }
+
+    # `A2A.Server.handle/1` + `put_handle/1` are public (used by the supervisor);
+    # swap the served card on the already-started handle for this assertion.
+    :ok = A2A.Server.put_handle(%{A2A.Server.handle(name) | agent_card: card})
+
+    conn = Router.call(conn(:get, "/.well-known/agent-card.json"), opts)
+    assert conn.status == 200
+
+    assert {:ok, %AgentCard{supported_interfaces: [%{url: "http://www.example.com/"}]}} =
+             A2A.JSON.decode(conn.resp_body, AgentCard)
+  end
+
   test "GET agent card 404s when no card configured" do
     # Stop the setup-started tree first: the default TaskStore.ETS child is a
     # globally-named GenServer/table, so two live trees collide.

@@ -16,6 +16,7 @@ defmodule A2A.Plug.Router do
   use Plug.Router, copy_opts_to_assign: :init_opts
 
   alias A2A.Plug.{JSONRPC, REST, SSE}
+  alias A2A.Server.AgentCardURL
 
   plug(:match)
   plug(:dispatch)
@@ -30,7 +31,7 @@ defmodule A2A.Plug.Router do
       card ->
         conn
         |> put_resp_content_type("application/json")
-        |> send_resp(200, A2A.JSON.encode!(card))
+        |> send_resp(200, A2A.JSON.encode!(AgentCardURL.resolve(card, conn)))
     end
   end
 
