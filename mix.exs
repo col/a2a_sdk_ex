@@ -91,10 +91,7 @@ defmodule A2A.MixProject do
       main: "readme",
       source_url: @source_url,
       source_ref: "v#{@version}",
-      extras: ["README.md", "CHANGELOG.md"] ++ Path.wildcard("docs/architecture/*.md"),
-      groups_for_extras: [
-        Guides: Path.wildcard("docs/architecture/*.md")
-      ],
+      extras: ["README.md", "CHANGELOG.md"],
       groups_for_modules: [
         Types: [~r/^A2A\.Types\./],
         Codec: [A2A.JSON],

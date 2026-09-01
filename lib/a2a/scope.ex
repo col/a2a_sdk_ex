@@ -1,5 +1,9 @@
 defmodule A2A.Scope do
-  @moduledoc false
+  @moduledoc """
+  The tenant/owner scope passed to `A2A.Server.TaskStore` callbacks (fields
+  `tenant` and `owner`). `default/0` returns an empty scope for single-tenant
+  agents.
+  """
   @type t :: %__MODULE__{tenant: String.t() | nil, owner: String.t() | nil}
   defstruct tenant: nil, owner: nil
 

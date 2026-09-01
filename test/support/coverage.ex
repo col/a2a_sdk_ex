@@ -42,7 +42,7 @@ defmodule A2A.Test.Coverage do
 
   # `:code.all_loaded/0` only sees loaded modules; force-load the A2A.Types tree.
   defp ensure_loaded do
-    {:ok, mods} = :application.get_key(:a2a, :modules)
+    {:ok, mods} = :application.get_key(:a2a_sdk, :modules)
     Enum.each(mods, &Code.ensure_loaded/1)
   end
 end
