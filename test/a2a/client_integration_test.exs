@@ -2,13 +2,19 @@ defmodule A2A.ClientIntegrationTest do
   @moduledoc """
   End-to-end interop oracle: the real `A2A.Client` (default `A2A.Client.HTTP.Req`
   adapter) driven against a real in-process `A2A.Server.Supervisor` tree behind
-  `A2A.Standalone` (Bandit) on an OS-assigned port, once per protocol binding
-  (`JSONRPC` and `HTTP+JSON`) served off the same dual-interface `AgentCard`.
+  `A2A.Standalone` (Bandit), once per protocol binding (`JSONRPC` and
+  `HTTP+JSON`) served off the same dual-interface `AgentCard`.
 
-  Runs in the **default** `mix test` — `req` and `bandit` are unconditional deps
-  (see `mix.exs`), and binding an ephemeral port (`port: 0`) worked in this
-  environment (verified via `ThousandIsland.listener_info/1`, the same technique
-  `A2A.StandaloneTest` already uses). No `--include` flag is needed.
+  The port is a fixed pseudo-random value in `4100..4599`, chosen *before*
+  either process starts. `A2A.Server.Supervisor` needs the finished `AgentCard`
+  (with real interface URLs) up front, so we can't ask Bandit for an
+  OS-assigned port (`port: 0`) first — the card would already be baked with
+  the wrong URL by the time the listener told us its port. Picking a
+  pseudo-random port up front sidesteps that chicken-and-egg problem at the
+  cost of a small, accepted collision risk for a single test run.
+
+  Runs in the **default** `mix test` — `req` and `bandit` are unconditional
+  deps (see `mix.exs`). No `--include` flag is needed.
 
   Because `A2A.Server.TaskStore.ETS` is globally named, only **one** server tree
   is started for the whole module (`setup_all`); the two bindings are
@@ -95,7 +101,13 @@ defmodule A2A.ClientIntegrationTest do
       end
 
       test "connect/2 discovers the card and selects the binding", %{client: client} do
-        assert client.transport
+        expected_transport =
+          case unquote(binding) do
+            "JSONRPC" -> A2A.Client.Transport.JSONRPC
+            "HTTP+JSON" -> A2A.Client.Transport.REST
+          end
+
+        assert client.transport == expected_transport
         assert %AgentCard{} = client.agent_card
       end
 
