@@ -43,9 +43,9 @@ defmodule A2A.Client.Error do
   }
 
   @spec from_jsonrpc(map()) :: A2A.Error.t()
-  def from_jsonrpc(%{"code" => code} = err) do
-    message = Map.get(err, "message", "error")
-    info = err |> Map.get("data") |> error_info()
+  def from_jsonrpc(%{"code" => code} = error) do
+    message = Map.get(error, "message", "error")
+    info = error |> Map.get("data") |> error_info()
     reason = info && info["reason"]
 
     atom = (reason && @by_reason[reason]) || Map.get(@by_jsonrpc, code, :internal_error)
@@ -53,8 +53,8 @@ defmodule A2A.Client.Error do
   end
 
   # Fallback for a malformed/nonstandard error object missing "code" entirely.
-  def from_jsonrpc(err) when is_map(err) do
-    %A2A.Error{code: :internal_error, message: Map.get(err, "message", "error")}
+  def from_jsonrpc(error) when is_map(error) do
+    %A2A.Error{code: :internal_error, message: Map.get(error, "message", "error")}
   end
 
   @spec from_rest(integer(), map() | binary()) :: A2A.Error.t()
@@ -65,9 +65,9 @@ defmodule A2A.Client.Error do
     end
   end
 
-  def from_rest(status, %{"error" => err}) do
-    message = Map.get(err, "message", "error")
-    info = err |> Map.get("details") |> error_info()
+  def from_rest(status, %{"error" => error}) do
+    message = Map.get(error, "message", "error")
+    info = error |> Map.get("details") |> error_info()
     reason = info && info["reason"]
     atom = (reason && @by_reason[reason]) || http_atom(status)
     %A2A.Error{code: atom, message: message, data: metadata(info)}
@@ -86,7 +86,7 @@ defmodule A2A.Client.Error do
 
   defp error_info(_), do: nil
 
-  defp metadata(%{"metadata" => m}) when is_map(m), do: m
+  defp metadata(%{"metadata" => map}) when is_map(map), do: map
   defp metadata(_), do: nil
 
   # Coarse fallback when no A2A reason is present.
@@ -94,6 +94,6 @@ defmodule A2A.Client.Error do
   defp http_atom(409), do: :task_not_cancelable
   defp http_atom(415), do: :content_type_not_supported
   defp http_atom(504), do: :timeout
-  defp http_atom(s) when s in 500..599, do: :internal_error
+  defp http_atom(status) when status in 500..599, do: :internal_error
   defp http_atom(_), do: :invalid_params
 end

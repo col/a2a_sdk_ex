@@ -8,7 +8,7 @@ defmodule A2A.Client.HTTP.ReqTest do
       Req.Test.json(conn, %{"ok" => true})
     end)
 
-    req = %{
+    request = %{
       method: :post,
       url: "http://example.com/",
       headers: [{"content-type", "application/json"}],
@@ -16,7 +16,7 @@ defmodule A2A.Client.HTTP.ReqTest do
       opts: [timeout: 1000, req: [plug: {Req.Test, A2A.Client.HTTP.Req}]]
     }
 
-    assert {:ok, %{status: 200, body: body}} = Adapter.request(req)
+    assert {:ok, %{status: 200, body: body}} = Adapter.request(request)
     assert body =~ "ok"
   end
 
@@ -25,13 +25,13 @@ defmodule A2A.Client.HTTP.ReqTest do
       conn
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.send_chunked(200)
-      |> then(fn c ->
-        {:ok, c} = Plug.Conn.chunk(c, "data: 1\n\n")
-        c
+      |> then(fn conn ->
+        {:ok, conn} = Plug.Conn.chunk(conn, "data: 1\n\n")
+        conn
       end)
     end)
 
-    req = %{
+    request = %{
       method: :get,
       url: "http://example.com/",
       headers: [],
@@ -39,7 +39,7 @@ defmodule A2A.Client.HTTP.ReqTest do
       opts: [stream_timeout: 1000, req: [plug: {Req.Test, A2A.Client.HTTP.Req}]]
     }
 
-    assert {:ok, %{status: 200, body: async}} = Adapter.stream(req)
+    assert {:ok, %{status: 200, body: async}} = Adapter.stream(request)
     assert Enum.join(Enum.to_list(async)) =~ "data: 1"
   end
 end

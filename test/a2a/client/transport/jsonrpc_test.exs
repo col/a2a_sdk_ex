@@ -30,8 +30,8 @@ defmodule A2A.Client.Transport.JSONRPCTest do
   end
 
   test "send_message returns a bare Message" do
-    m = %Message{message_id: "m2", role: :agent, parts: [Part.text("yo")]}
-    Stub.put(%{{:post, "/"} => rpc_ok(%{"message" => A2A.JSON.to_json_map(m)})})
+    message = %Message{message_id: "m2", role: :agent, parts: [Part.text("yo")]}
+    Stub.put(%{{:post, "/"} => rpc_ok(%{"message" => A2A.JSON.to_json_map(message)})})
     msg = %Message{message_id: "m1", role: :user, parts: [Part.text("hi")]}
 
     assert {:ok, %Message{message_id: "m2"}} =

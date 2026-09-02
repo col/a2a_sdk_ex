@@ -8,12 +8,12 @@ defmodule A2A.Client.TransportTest do
   end
 
   test "base_headers merges defaults, config, and per-call (opts win)" do
-    c = client(headers: [{"authorization", "Bearer a"}], protocol_version: "1.0")
-    h = Transport.base_headers(c.config, headers: [{"authorization", "Bearer b"}])
-    assert {"content-type", "application/json"} in h
-    assert {"a2a-version", "1.0"} in h
-    assert {"authorization", "Bearer b"} in h
-    refute {"authorization", "Bearer a"} in h
+    client = client(headers: [{"authorization", "Bearer a"}], protocol_version: "1.0")
+    headers = Transport.base_headers(client.config, headers: [{"authorization", "Bearer b"}])
+    assert {"content-type", "application/json"} in headers
+    assert {"a2a-version", "1.0"} in headers
+    assert {"authorization", "Bearer b"} in headers
+    refute {"authorization", "Bearer a"} in headers
   end
 
   test "run/3 wraps transport error via from_transport" do
@@ -23,10 +23,10 @@ defmodule A2A.Client.TransportTest do
       def stream(_), do: {:error, :econnrefused}
     end
 
-    c = client(http_client: BoomHTTP)
-    req = %{method: :post, url: "http://x/", headers: [], body: "{}", opts: []}
+    client = client(http_client: BoomHTTP)
+    request = %{method: :post, url: "http://x/", headers: [], body: "{}", opts: []}
 
     assert {:error, %A2A.Error{code: :internal_error, data: :econnrefused}} =
-             Transport.run(c, req, :unary)
+             Transport.run(client, request, :unary)
   end
 end

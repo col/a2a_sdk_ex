@@ -16,10 +16,10 @@ defmodule A2A.ClientTest do
   end
 
   test "connect(%AgentCard{}) selects transport, no fetch" do
-    {:ok, c} = Client.connect(card(), http_client: Stub)
-    assert c.transport == A2A.Client.Transport.JSONRPC
-    assert c.endpoint == "http://x/"
-    assert Client.agent_card(c).name == "Bot"
+    {:ok, client} = Client.connect(card(), http_client: Stub)
+    assert client.transport == A2A.Client.Transport.JSONRPC
+    assert client.endpoint == "http://x/"
+    assert Client.agent_card(client).name == "Bot"
   end
 
   test "connect(url) fetches then selects" do
@@ -31,12 +31,12 @@ defmodule A2A.ClientTest do
       }
     })
 
-    {:ok, c} = Client.connect("http://x", http_client: Stub)
-    assert c.transport == A2A.Client.Transport.JSONRPC
+    {:ok, client} = Client.connect("http://x", http_client: Stub)
+    assert client.transport == A2A.Client.Transport.JSONRPC
   end
 
   test "get_task delegates through the transport" do
-    {:ok, c} = Client.connect(card(), http_client: Stub)
+    {:ok, client} = Client.connect(card(), http_client: Stub)
 
     Stub.put(%{
       {:post, "/"} => %{
@@ -55,11 +55,11 @@ defmodule A2A.ClientTest do
       }
     })
 
-    assert {:ok, %Task{id: "t1"}} = Client.get_task(c, "t1")
+    assert {:ok, %Task{id: "t1"}} = Client.get_task(client, "t1")
   end
 
   test "send_message wraps a bare Message into a request" do
-    {:ok, c} = Client.connect(card(), http_client: Stub)
+    {:ok, client} = Client.connect(card(), http_client: Stub)
     out = %Message{message_id: "m2", role: :agent, parts: [Part.text("yo")]}
 
     Stub.put(%{
@@ -76,7 +76,7 @@ defmodule A2A.ClientTest do
     })
 
     assert {:ok, %Message{message_id: "m2"}} =
-             Client.send_message(c, %Message{
+             Client.send_message(client, %Message{
                message_id: "m1",
                role: :user,
                parts: [Part.text("hi")]

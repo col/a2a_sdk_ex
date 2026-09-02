@@ -28,7 +28,7 @@ defmodule A2A.Client.Transport.Selector do
 
     case result do
       nil -> {:error, %A2A.Error{code: :unsupported_operation, message: "no compatible transport"}}
-      {mod, url} -> {:ok, {mod, url}}
+      {module, url} -> {:ok, {module, url}}
     end
   end
 
@@ -39,14 +39,14 @@ defmodule A2A.Client.Transport.Selector do
 
   defp dedup_ci(list) do
     list
-    |> Enum.reduce({[], MapSet.new()}, fn b, {acc, seen} ->
-      key = downcase(b)
-      if MapSet.member?(seen, key), do: {acc, seen}, else: {[b | acc], MapSet.put(seen, key)}
+    |> Enum.reduce({[], MapSet.new()}, fn binding, {acc, seen} ->
+      key = downcase(binding)
+      if MapSet.member?(seen, key), do: {acc, seen}, else: {[binding | acc], MapSet.put(seen, key)}
     end)
     |> elem(0)
     |> Enum.reverse()
   end
 
   defp downcase(nil), do: ""
-  defp downcase(s), do: String.downcase(s)
+  defp downcase(value), do: String.downcase(value)
 end

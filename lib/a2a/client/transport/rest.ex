@@ -3,7 +3,7 @@ defmodule A2A.Client.Transport.REST do
   @behaviour A2A.Client.Transport
 
   import A2A.Client.Transport, only: [base_headers: 2, http_opts: 3, run: 3]
-  alias A2A.Client.Error, as: CErr
+  alias A2A.Client.Error, as: ClientError
 
   alias A2A.Client.SSE
 
@@ -20,8 +20,8 @@ defmodule A2A.Client.Transport.REST do
   @impl true
   def send_message(client, request, opts) do
     with {:ok, map} <- post(client, "/message:send", request, opts),
-         {:ok, %SendMessageResponse{} = r} <- decode(map, SendMessageResponse) do
-      {:ok, r.task || r.message}
+         {:ok, %SendMessageResponse{} = response} <- decode(map, SendMessageResponse) do
+      {:ok, response.task || response.message}
     end
   end
 
@@ -80,7 +80,7 @@ defmodule A2A.Client.Transport.REST do
   def delete_push_config(client, request, opts) do
     path = "/tasks/" <> request.task_id <> "/pushNotificationConfigs/" <> request.id
 
-    req = %{
+    request = %{
       method: :delete,
       url: url(client, path, %{}),
       headers: base_headers(client.config, opts),
@@ -88,10 +88,10 @@ defmodule A2A.Client.Transport.REST do
       opts: http_opts(client, opts, :unary)
     }
 
-    case run(client, req, :unary) do
-      {:ok, %{status: s}} when s in 200..299 -> :ok
-      {:ok, %{status: s, body: b}} -> {:error, CErr.from_rest(s, b)}
-      {:error, %A2A.Error{}} = e -> e
+    case run(client, request, :unary) do
+      {:ok, %{status: status}} when status in 200..299 -> :ok
+      {:ok, %{status: status, body: body}} -> {:error, ClientError.from_rest(status, body)}
+      {:error, %A2A.Error{}} = error -> error
     end
   end
 
@@ -110,7 +110,7 @@ defmodule A2A.Client.Transport.REST do
   defp stream(client, method, path, body, opts) do
     headers = [{"accept", "text/event-stream"} | base_headers(client.config, opts)]
 
-    req = %{
+    request = %{
       method: method,
       url: url(client, path, %{}),
       headers: headers,
@@ -118,10 +118,10 @@ defmodule A2A.Client.Transport.REST do
       opts: http_opts(client, opts, :stream)
     }
 
-    case run(client, req, :stream) do
-      {:ok, %{status: s, body: chunks}} when s in 200..299 -> {:ok, decode_stream(chunks)}
-      {:ok, %{status: s, body: b}} -> {:error, CErr.from_rest(s, collect(b))}
-      {:error, %A2A.Error{}} = e -> e
+    case run(client, request, :stream) do
+      {:ok, %{status: status, body: chunks}} when status in 200..299 -> {:ok, decode_stream(chunks)}
+      {:ok, %{status: status, body: body}} -> {:error, ClientError.from_rest(status, collect(body))}
+      {:error, %A2A.Error{}} = error -> error
     end
   end
 
@@ -129,17 +129,20 @@ defmodule A2A.Client.Transport.REST do
     chunks
     |> SSE.frames()
     |> Stream.map(fn data ->
-      {:ok, %StreamResponse{} = sr} = A2A.JSON.from_json_map(Jason.decode!(data), StreamResponse)
-      sr.task || sr.message || sr.status_update || sr.artifact_update
+      {:ok, %StreamResponse{} = stream_response} =
+        A2A.JSON.from_json_map(Jason.decode!(data), StreamResponse)
+
+      stream_response.task || stream_response.message || stream_response.status_update ||
+        stream_response.artifact_update
     end)
   end
 
   # A non-2xx streaming response may carry its error body as chunks or binary.
-  defp collect(b) when is_binary(b), do: b
+  defp collect(body) when is_binary(body), do: body
   defp collect(chunks), do: chunks |> Enum.to_list() |> IO.iodata_to_binary()
 
-  defp get(client, path, query, mod, opts) do
-    req = %{
+  defp get(client, path, query, module, opts) do
+    request = %{
       method: :get,
       url: url(client, path, query),
       headers: base_headers(client.config, opts),
@@ -147,11 +150,11 @@ defmodule A2A.Client.Transport.REST do
       opts: http_opts(client, opts, :unary)
     }
 
-    with {:ok, map} <- send_unary(client, req), do: decode(map, mod)
+    with {:ok, map} <- send_unary(client, request), do: decode(map, module)
   end
 
   defp post(client, path, request, opts) do
-    req = %{
+    http_request = %{
       method: :post,
       url: url(client, path, %{}),
       headers: base_headers(client.config, opts),
@@ -159,11 +162,11 @@ defmodule A2A.Client.Transport.REST do
       opts: http_opts(client, opts, :unary)
     }
 
-    send_unary(client, req)
+    send_unary(client, http_request)
   end
 
   defp post_empty(client, path, opts) do
-    req = %{
+    request = %{
       method: :post,
       url: url(client, path, %{}),
       headers: base_headers(client.config, opts),
@@ -171,30 +174,35 @@ defmodule A2A.Client.Transport.REST do
       opts: http_opts(client, opts, :unary)
     }
 
-    send_unary(client, req)
+    send_unary(client, request)
   end
 
   # Returns {:ok, decoded_json_map} | {:error, A2A.Error.t()}
-  defp send_unary(client, req) do
-    case run(client, req, :unary) do
-      {:ok, %{status: s, body: b}} when s in 200..299 -> {:ok, Jason.decode!(b)}
-      {:ok, %{status: s, body: b}} -> {:error, CErr.from_rest(s, b)}
-      {:error, %A2A.Error{}} = e -> e
+  defp send_unary(client, request) do
+    case run(client, request, :unary) do
+      {:ok, %{status: status, body: body}} when status in 200..299 -> {:ok, Jason.decode!(body)}
+      {:ok, %{status: status, body: body}} -> {:error, ClientError.from_rest(status, body)}
+      {:error, %A2A.Error{}} = error -> error
     end
   end
 
-  defp decode(map, mod) do
-    case A2A.JSON.from_json_map(map, mod) do
-      {:ok, v} -> {:ok, v}
-      {:error, r} -> {:error, %A2A.Error{code: :invalid_agent_response, message: inspect(r)}}
+  defp decode(map, module) do
+    case A2A.JSON.from_json_map(map, module) do
+      {:ok, value} ->
+        {:ok, value}
+
+      {:error, reason} ->
+        {:error, %A2A.Error{code: :invalid_agent_response, message: inspect(reason)}}
     end
   end
 
   defp url(%A2A.Client{endpoint: base}, path, query) do
     trimmed = String.trim_trailing(base, "/")
-    q = if map_size(query) == 0, do: "", else: "?" <> URI.encode_query(query)
-    trimmed <> path <> q
+    query_string = if map_size(query) == 0, do: "", else: "?" <> URI.encode_query(query)
+    trimmed <> path <> query_string
   end
 
-  defp drop_nil(map), do: for({k, v} <- map, not is_nil(v), into: %{}, do: {k, to_string(v)})
+  defp drop_nil(map) do
+    for {key, value} <- map, not is_nil(value), into: %{}, do: {key, to_string(value)}
+  end
 end

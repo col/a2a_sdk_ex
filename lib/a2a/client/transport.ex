@@ -1,5 +1,7 @@
 defmodule A2A.Client.Transport do
   @moduledoc "Behaviour + shared helpers for client transports (JSON-RPC, REST)."
+  alias A2A.Client.Error, as: ClientError
+
   alias A2A.Types.{
     AgentCard,
     CancelTaskRequest,
@@ -49,8 +51,13 @@ defmodule A2A.Client.Transport do
 
   # Later (per-call) headers win on case-insensitive key.
   defp merge_headers(base, override) do
-    Enum.reduce(override, base, fn {k, v}, acc ->
-      [{k, v} | Enum.reject(acc, fn {ek, _} -> String.downcase(ek) == String.downcase(k) end)]
+    Enum.reduce(override, base, fn {key, value}, acc ->
+      [
+        {key, value}
+        | Enum.reject(acc, fn {existing_key, _} ->
+            String.downcase(existing_key) == String.downcase(key)
+          end)
+      ]
     end)
   end
 
@@ -67,14 +74,14 @@ defmodule A2A.Client.Transport do
 
   @spec run(client, A2A.Client.HTTP.request(), :unary | :stream) ::
           {:ok, A2A.Client.HTTP.response()} | {:error, A2A.Error.t()}
-  def run(%A2A.Client{config: %{http_client: http}}, req, :unary) do
-    wrap(http.request(req))
+  def run(%A2A.Client{config: %{http_client: http}}, request, :unary) do
+    wrap(http.request(request))
   end
 
-  def run(%A2A.Client{config: %{http_client: http}}, req, :stream) do
-    wrap(http.stream(req))
+  def run(%A2A.Client{config: %{http_client: http}}, request, :stream) do
+    wrap(http.stream(request))
   end
 
-  defp wrap({:ok, resp}), do: {:ok, resp}
-  defp wrap({:error, reason}), do: {:error, A2A.Client.Error.from_transport(reason)}
+  defp wrap({:ok, response}), do: {:ok, response}
+  defp wrap({:error, reason}), do: {:error, ClientError.from_transport(reason)}
 end

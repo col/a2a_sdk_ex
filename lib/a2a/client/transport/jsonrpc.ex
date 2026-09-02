@@ -3,7 +3,7 @@ defmodule A2A.Client.Transport.JSONRPC do
   @behaviour A2A.Client.Transport
 
   import A2A.Client.Transport, only: [base_headers: 2, http_opts: 3, run: 3]
-  alias A2A.Client.Error, as: CErr
+  alias A2A.Client.Error, as: ClientError
   alias A2A.Client.SSE
 
   alias A2A.Types.{
@@ -95,7 +95,7 @@ defmodule A2A.Client.Transport.JSONRPC do
 
     headers = [{"accept", "text/event-stream"} | base_headers(client.config, opts)]
 
-    req = %{
+    request = %{
       method: :post,
       url: client.endpoint,
       headers: headers,
@@ -103,8 +103,8 @@ defmodule A2A.Client.Transport.JSONRPC do
       opts: http_opts(client, opts, :stream)
     }
 
-    with {:ok, resp} <- run(client, req, :stream) do
-      handle_stream_response(resp)
+    with {:ok, response} <- run(client, request, :stream) do
+      handle_stream_response(response)
     end
   end
 
@@ -129,13 +129,13 @@ defmodule A2A.Client.Transport.JSONRPC do
 
   defp decode_non_stream_body(body) do
     case Jason.decode(collect(body)) do
-      {:ok, %{"error" => err}} -> {:error, CErr.from_jsonrpc(err)}
+      {:ok, %{"error" => error}} -> {:error, ClientError.from_jsonrpc(error)}
       _ -> {:error, %A2A.Error{code: :invalid_agent_response, message: "expected SSE stream"}}
     end
   end
 
   # The error body may arrive as a binary or as an enumerable of chunks.
-  defp collect(b) when is_binary(b), do: b
+  defp collect(body) when is_binary(body), do: body
   defp collect(chunks), do: chunks |> Enum.to_list() |> IO.iodata_to_binary()
 
   # chunks :: Enumerable of raw binary body parts
@@ -149,18 +149,20 @@ defmodule A2A.Client.Transport.JSONRPC do
   defp decode_frame(data) do
     case Jason.decode!(data) do
       %{"result" => result} ->
-        {:ok, %StreamResponse{} = sr} = A2A.JSON.from_json_map(result, StreamResponse)
+        {:ok, %StreamResponse{} = stream_response} =
+          A2A.JSON.from_json_map(result, StreamResponse)
 
-        sr.task || sr.message || sr.status_update || sr.artifact_update
+        stream_response.task || stream_response.message || stream_response.status_update ||
+          stream_response.artifact_update
 
-      %{"error" => err} ->
-        raise CErr.from_jsonrpc(err)
+      %{"error" => error} ->
+        raise ClientError.from_jsonrpc(error)
     end
   end
 
-  defp unary(client, method, request, result_mod, opts) do
+  defp unary(client, method, request, result_module, opts) do
     with {:ok, result} <- call(client, method, request, opts) do
-      to_result(A2A.JSON.from_json_map(result, result_mod))
+      to_result(A2A.JSON.from_json_map(result, result_module))
     end
   end
 
@@ -182,7 +184,7 @@ defmodule A2A.Client.Transport.JSONRPC do
         "params" => A2A.JSON.to_json_map(request)
       })
 
-    req = %{
+    request = %{
       method: :post,
       url: client.endpoint,
       headers: base_headers(client.config, opts),
@@ -190,15 +192,15 @@ defmodule A2A.Client.Transport.JSONRPC do
       opts: http_opts(client, opts, :unary)
     }
 
-    with {:ok, %{body: raw}} <- run(client, req, :unary) do
-      decode_envelope(raw)
+    with {:ok, %{body: raw_body}} <- run(client, request, :unary) do
+      decode_envelope(raw_body)
     end
   end
 
-  defp decode_envelope(raw) do
-    case Jason.decode(raw) do
+  defp decode_envelope(raw_body) do
+    case Jason.decode(raw_body) do
       {:ok, %{"result" => result}} -> {:ok, result}
-      {:ok, %{"error" => err}} -> {:error, CErr.from_jsonrpc(err)}
+      {:ok, %{"error" => error}} -> {:error, ClientError.from_jsonrpc(error)}
       {:ok, _} -> {:error, %A2A.Error{code: :invalid_agent_response, message: "no result or error"}}
       {:error, _} -> {:error, %A2A.Error{code: :invalid_agent_response, message: "invalid JSON"}}
     end

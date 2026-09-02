@@ -3,19 +3,21 @@ defmodule A2A.Client.ConfigTest do
   alias A2A.Client.Config
 
   test "new/1 applies defaults" do
-    c = Config.new([])
-    assert c.http_client == A2A.Client.HTTP.Req
-    assert c.streaming? == true
-    assert c.timeout == 30_000
-    assert c.stream_timeout == 120_000
-    assert c.protocol_version == "1.0"
-    assert c.preferred_transports == []
+    config = Config.new([])
+    assert config.http_client == A2A.Client.HTTP.Req
+    assert config.streaming? == true
+    assert config.timeout == 30_000
+    assert config.stream_timeout == 120_000
+    assert config.protocol_version == "1.0"
+    assert config.preferred_transports == []
   end
 
   test "new/1 overrides provided keys" do
-    c = Config.new(stream_timeout: 5_000, preferred_transports: ["JSONRPC"], http_client: MyMod)
-    assert c.stream_timeout == 5_000
-    assert c.preferred_transports == ["JSONRPC"]
-    assert c.http_client == MyMod
+    config =
+      Config.new(stream_timeout: 5_000, preferred_transports: ["JSONRPC"], http_client: MyMod)
+
+    assert config.stream_timeout == 5_000
+    assert config.preferred_transports == ["JSONRPC"]
+    assert config.http_client == MyMod
   end
 end
