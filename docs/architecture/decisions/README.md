@@ -26,6 +26,7 @@ supersedes an earlier one.
 | [0016](0016-direct-message-responses.md) | Direct message responses | Accepted |
 | [0017](0017-streams-terminate-at-task-terminal.md) | Streams terminate at task-terminal only | Accepted |
 | [0018](0018-identity-ownership-and-extended-card.md) | Identity resolution, per-owner storage isolation, and the authenticated extended card | Accepted |
+| [0019](0019-client-design.md) | Client design: facade + transport behaviour, injectable HTTP, header-passthrough auth | Accepted |
 
 ADRs 0001–0008 were taken together during initial architecture planning (2026-08-29),
 informed by a feature inventory of the official

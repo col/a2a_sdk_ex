@@ -10,7 +10,7 @@ ADR.
 
 | Dimension | v1 | Deferred |
 | --- | --- | --- |
-| Side | **Server** (host an agent) | Client (call agents) |
+| Side | **Server** (host an agent) + **Client** (call agents) | gRPC client |
 | Protocol | **v1.0 only** | v0.3 backward-compat |
 | Transports | **JSON-RPC + REST** | gRPC |
 | Types | **hand-written structs** | proto-generated wire layer (with gRPC) |
@@ -64,8 +64,20 @@ ADRs: [0001](decisions/0001-server-first-scope.md),
   ([ADR-0018](decisions/0018-identity-ownership-and-extended-card.md))
 - **First-party Ecto adapter** — a fast-follow package once the `TaskStore`
   behaviour is proven. ([ADR-0007](decisions/0007-ets-task-store.md))
-- **The client side** — a separate effort after the server story lands.
-  ([ADR-0001](decisions/0001-server-first-scope.md))
+
+### Landed — the client side
+
+- **`A2A.Client`** — the caller-side counterpart to `A2A.Server.*`: a facade
+  in front of both JSON-RPC and REST transports, an injectable
+  `A2A.Client.HTTP` behaviour (first-party `Req` adapter), card-based
+  transport selection, streaming as a lazy enumerable, and header-passthrough
+  auth (including the authenticated extended card). Deferred within the
+  client itself — an interceptor/middleware chain, client-side credential
+  service/token refresh, a gRPC adapter, a client-side polling loop, and v0.3
+  compatibility — are recorded in
+  [ADR-0019](decisions/0019-client-design.md), which also supersedes the
+  "client side, deferred" line this ADR formerly carried
+  ([ADR-0001](decisions/0001-server-first-scope.md)).
 
 ## Why these boundaries
 
@@ -88,7 +100,9 @@ SDKs, v1 must prove wire compatibility:
 ## Roadmap sketch (post-v1, unordered)
 
 1. First-party Ecto/Postgres `TaskStore` adapter.
-2. Client side (`ClientFactory`, transports, card resolver, interceptors).
+2. Client-side interceptor/middleware chain and credential-service/token
+   refresh on top of the landed `A2A.Client` core
+   ([ADR-0019](decisions/0019-client-design.md)).
 3. Agent card signing + verification.
 4. gRPC transport (server, then client).
 5. v0.3 compatibility layer as an optional package.
